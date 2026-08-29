@@ -28,8 +28,19 @@ from academics import (
     format_exam_rescue_plan,
     format_subject_resources,
     format_subject_syllabus,
+    list_all_subjects,
     list_subjects,
     load_subject,
+)
+from academic_router import (
+    AcademicRoute,
+    PREPARATION_LEVEL_LABELS,
+    build_academic_context,
+    detect_subject_code,
+    format_progress_summary,
+    infer_preparation_level,
+    looks_like_academic_followup,
+    route_academic_message,
 )
 from keyboards import (
     academics_menu_keyboard,
@@ -47,12 +58,15 @@ from memory import (
     delete_memory,
     get_memories,
     get_recent_messages,
+    get_all_subject_progress,
     get_latest_exam_rescue_plan,
+    get_subject_progress,
     get_student_profile,
     init_db,
     save_memory,
     save_message,
     save_exam_rescue_plan,
+    save_subject_progress,
     save_student_profile,
 )
 
@@ -88,6 +102,11 @@ Your personality:
 You may receive recent conversation history and long-term user memories.
 Use those memories only when they are relevant. Do not mention the memory
 system unless the user asks about it.
+
+You may also receive a trusted RAVEN ACADEMIC CONTEXT block retrieved from
+Raven's local catalog. Use its exact syllabus, credits, progress and resource
+links. Never claim you cannot access information explicitly present there.
+Never invent missing academic data or PYQ importance.
 """.strip()
 
 
@@ -395,11 +414,13 @@ async def start_exam_rescue(
 
     subject = load_subject(subject_code)
     unit_numbers = [unit["number"] for unit in subject["units"]]
+    progress = get_subject_progress(update.effective_chat.id, subject_code)
+    completed_units = set((progress or {}).get("completed_units", []))
     context.user_data["rescue_draft"] = {
         "subject_code": subject_code,
         "subject_short_name": subject["short_name"],
         "unit_numbers": unit_numbers,
-        "completed_units": set(),
+        "completed_units": completed_units,
     }
     await query.edit_message_text(
         f"🚨 {subject['short_name']} EXAM RESCUE\n\n"
@@ -436,11 +457,14 @@ async def receive_rescue_days(
 
     draft["days"] = days
     short_name = draft["subject_short_name"]
+    selected = draft["completed_units"]
+    selected_text = ", ".join(map(str, sorted(selected))) if selected else "None"
     await update.effective_message.reply_text(
         f"Which {short_name} units have you already completed?\n\n"
+        f"Saved selection: {selected_text}\n\n"
         "Tap units to select or unselect them, then press Continue. "
         "Leave every unit unchecked if you are starting from zero.",
-        reply_markup=completed_units_keyboard(set(), draft["unit_numbers"]),
+        reply_markup=completed_units_keyboard(selected, draft["unit_numbers"]),
     )
     return RESCUE_COMPLETED
 
@@ -527,6 +551,16 @@ async def generate_rescue_plan(
         target_score=target_score,
     )
     plan_id = save_exam_rescue_plan(update.effective_chat.id, plan)
+    preparation_level = infer_preparation_level(
+        set(draft["completed_units"]),
+        len(draft["unit_numbers"]),
+    )
+    save_subject_progress(
+        chat_id=update.effective_chat.id,
+        subject_code=draft["subject_code"],
+        preparation_level=preparation_level,
+        completed_units=draft["completed_units"],
+    )
     context.user_data.pop("rescue_draft", None)
 
     await query.edit_message_text(
@@ -637,8 +671,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if action == "chat":
         text = (
-            "💬 CHAT\n\nSend any normal text message and Raven will reply through "
-            "your configured Ollama model."
+            "💬 CHAT\n\nAsk Raven normally. Academic syllabus, resources, credits "
+            "and preparation data are retrieved before Ollama answers."
         )
     elif action == "attendance":
         text = "📊 Attendance tracking is planned after the Academic resource foundation."
@@ -797,7 +831,83 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     deleted_count = clear_chat_history(update.effective_chat.id)
     await update.effective_message.reply_text(
         f"🧹 Recent conversation history cleared ({deleted_count} messages).\n"
-        "Your long-term memories and student profile were not deleted."
+        "Your long-term memories, student profile and preparation progress "
+        "were not deleted."
+    )
+
+
+def _progress_by_subject(chat_id: int) -> dict[str, dict]:
+    return {
+        progress["subject_code"]: progress
+        for progress in get_all_subject_progress(chat_id)
+    }
+
+
+async def progress_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    chat_id = update.effective_chat.id
+    profile = get_student_profile(chat_id)
+    if not profile:
+        await update.effective_message.reply_text(
+            "You need a student profile first. Send /setup."
+        )
+        return
+
+    subjects = list_subjects(profile["branch"], profile["semester"])
+    if not subjects:
+        subjects = list_all_subjects()
+    requested_text = " ".join(context.args).strip()
+    subject_code = (
+        detect_subject_code(requested_text, subjects)
+        if requested_text
+        else None
+    )
+    if requested_text and not subject_code:
+        await update.effective_message.reply_text(
+            "I couldn't identify that subject. Try /progress COA or /progress DSTL."
+        )
+        return
+
+    text = format_progress_summary(
+        subjects,
+        _progress_by_subject(chat_id),
+        subject_code,
+    )
+    await send_in_chunks(update.effective_message, text)
+
+
+def _apply_progress_update(
+    *,
+    chat_id: int,
+    route: AcademicRoute,
+) -> dict:
+    subject = load_subject(route.subject_code)
+    valid_units = {unit["number"] for unit in subject["units"]}
+    requested_units = set(route.unit_numbers)
+    if not requested_units.issubset(valid_units):
+        valid_text = ", ".join(map(str, sorted(valid_units)))
+        raise ValueError(f"Completed units can contain only: {valid_text}")
+
+    existing = get_subject_progress(chat_id, route.subject_code) or {}
+    completed = set(existing.get("completed_units", []))
+    if route.completed_action == "add":
+        completed.update(requested_units)
+    elif route.completed_action == "remove":
+        completed.difference_update(requested_units)
+
+    level = route.preparation_level
+    if level is None and route.completed_action:
+        level = infer_preparation_level(completed, len(valid_units))
+
+    return save_subject_progress(
+        chat_id=chat_id,
+        subject_code=route.subject_code,
+        preparation_level=level,
+        completed_units=completed,
+        latest_score=route.latest_score,
+        latest_score_max=route.latest_score_max,
     )
 
 
@@ -811,6 +921,100 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("User chat_id=%s sent a message", chat_id)
     save_message(chat_id=chat_id, role="user", content=user_message)
 
+    profile = get_student_profile(chat_id)
+    subjects = (
+        list_subjects(profile["branch"], profile["semester"])
+        if profile
+        else []
+    )
+    if not subjects:
+        subjects = list_all_subjects()
+    route = route_academic_message(user_message, subjects)
+
+    pending_request = context.user_data.get("pending_academic_request")
+    if pending_request and any(
+        phrase in user_message.casefold()
+        for phrase in ("never mind", "nevermind", "cancel")
+    ):
+        context.user_data.pop("pending_academic_request", None)
+        route = AcademicRoute(
+            kind="direct",
+            intent="cancel_pending",
+            response="Okay—the pending academic request was cancelled.",
+        )
+        pending_request = None
+
+    if pending_request and route.subject_code:
+        units = " ".join(
+            f"Unit {unit}" for unit in pending_request.get("unit_numbers", [])
+        )
+        route = route_academic_message(
+            f"{pending_request['intent']} {units} {route.subject_code}",
+            subjects,
+        )
+        context.user_data.pop("pending_academic_request", None)
+        pending_request = None
+
+    if pending_request and route.kind == "none":
+        available = ", ".join(subject["short_name"] for subject in subjects)
+        route = AcademicRoute(
+            kind="direct",
+            intent=pending_request["intent"],
+            unit_numbers=tuple(pending_request.get("unit_numbers", [])),
+            response=(
+                "I still couldn't match that subject. Choose one of: "
+                f"{available}."
+            ),
+        )
+
+    previous_subject = context.user_data.get("last_academic_subject_code")
+    if (
+        route.subject_code is None
+        and previous_subject
+        and looks_like_academic_followup(user_message)
+    ):
+        route = route_academic_message(
+            f"{user_message} {previous_subject}",
+            subjects,
+        )
+    if route.subject_code:
+        context.user_data["last_academic_subject_code"] = route.subject_code
+    elif route.kind == "direct" and route.intent in {"resources", "syllabus"}:
+        context.user_data["pending_academic_request"] = {
+            "intent": route.intent,
+            "unit_numbers": list(route.unit_numbers),
+        }
+
+    if route.kind == "direct":
+        reply = route.response or "I couldn't retrieve that academic information."
+        save_message(chat_id=chat_id, role="assistant", content=reply)
+        await send_in_chunks(update.effective_message, reply)
+        return
+
+    if route.kind == "progress_view":
+        reply = format_progress_summary(
+            subjects,
+            _progress_by_subject(chat_id),
+            route.subject_code,
+        )
+        save_message(chat_id=chat_id, role="assistant", content=reply)
+        await send_in_chunks(update.effective_message, reply)
+        return
+
+    if route.kind == "progress_update":
+        try:
+            saved_progress = _apply_progress_update(chat_id=chat_id, route=route)
+            reply = "✅ Preparation progress updated.\n\n" + format_progress_summary(
+                subjects,
+                {route.subject_code: saved_progress},
+                route.subject_code,
+            )
+        except ValueError as error:
+            reply = f"⚠️ {error}"
+        save_message(chat_id=chat_id, role="assistant", content=reply)
+        await send_in_chunks(update.effective_message, reply)
+        return
+
     recent_history = get_recent_messages(
         chat_id=chat_id,
         limit=RECENT_MESSAGE_LIMIT,
@@ -820,6 +1024,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         limit=LONG_TERM_MEMORY_LIMIT,
     )
     complete_system_prompt = SYSTEM_PROMPT + build_memory_context(long_term_memories)
+    if route.kind == "context":
+        academic_context = build_academic_context(
+            route,
+            get_subject_progress(chat_id, route.subject_code),
+        )
+        complete_system_prompt += "\n\n" + academic_context
     messages = [{"role": "system", "content": complete_system_prompt}]
     messages.extend(recent_history)
 
@@ -916,6 +1126,7 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("lastplan", last_plan_command))
+    application.add_handler(CommandHandler("progress", progress_command))
     application.add_handler(CommandHandler("remember", remember_command))
     application.add_handler(CommandHandler("memories", memories_command))
     application.add_handler(CommandHandler("forget", forget_command))
@@ -940,7 +1151,7 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 2.3 is online")
+    logger.info("Raven Sprint 2.4.1 is online")
     logger.info("Ollama model: %s", OLLAMA_MODEL)
     logger.info("Database initialized")
     application.run_polling()

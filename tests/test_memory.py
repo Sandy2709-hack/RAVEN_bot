@@ -106,6 +106,65 @@ class MemoryDatabaseTests(unittest.TestCase):
         self.assertEqual(latest["subject_code"], "BCS301")
         self.assertEqual(latest_coa["plan_id"], plan_id)
 
+    def test_subject_progress_is_created_updated_and_isolated(self) -> None:
+        created = memory.save_subject_progress(
+            chat_id=27,
+            subject_code="bcs302",
+            preparation_level="basics_completed",
+            completed_units={2, 1},
+            latest_score=18,
+            latest_score_max=30,
+        )
+
+        self.assertEqual(created["subject_code"], "BCS302")
+        self.assertEqual(created["completed_units"], [1, 2])
+        self.assertEqual(created["latest_score"], 18)
+        self.assertEqual(created["latest_score_max"], 30)
+
+        updated = memory.save_subject_progress(
+            chat_id=27,
+            subject_code="BCS302",
+            preparation_level="mostly_prepared",
+            completed_units=[1, 2, 3, 4],
+        )
+        memory.save_subject_progress(
+            chat_id=99,
+            subject_code="BCS302",
+            completed_units=[5],
+        )
+
+        self.assertEqual(updated["preparation_level"], "mostly_prepared")
+        self.assertEqual(updated["completed_units"], [1, 2, 3, 4])
+        self.assertEqual(updated["latest_score"], 18)
+        self.assertEqual(
+            memory.get_subject_progress(99, "BCS302")["completed_units"],
+            [5],
+        )
+        self.assertEqual(len(memory.get_all_subject_progress(27)), 1)
+
+    def test_invalid_subject_progress_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            memory.save_subject_progress(
+                chat_id=27,
+                subject_code="BCS302",
+                preparation_level="perfect",
+            )
+
+        with self.assertRaises(ValueError):
+            memory.save_subject_progress(
+                chat_id=27,
+                subject_code="BCS302",
+                completed_units=[21],
+            )
+
+        with self.assertRaises(ValueError):
+            memory.save_subject_progress(
+                chat_id=27,
+                subject_code="BCS302",
+                latest_score=31,
+                latest_score_max=30,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

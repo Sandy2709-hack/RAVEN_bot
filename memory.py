@@ -114,6 +114,36 @@ def init_db() -> None:
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS student_subject_progress (
+                chat_id INTEGER NOT NULL,
+                subject_code TEXT NOT NULL,
+                preparation_level TEXT NOT NULL DEFAULT 'not_started'
+                    CHECK (
+                        preparation_level IN (
+                            'not_started',
+                            'basics_completed',
+                            'mostly_prepared',
+                            'revision_only'
+                        )
+                    ),
+                completed_units TEXT NOT NULL DEFAULT '[]',
+                latest_score REAL,
+                latest_score_max REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (chat_id, subject_code)
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_subject_progress_chat
+            ON student_subject_progress(chat_id, updated_at)
+            """
+        )
+
         connection.commit()
 
 
@@ -468,3 +498,155 @@ def get_latest_exam_rescue_plan(
     plan["plan_id"] = row["id"]
     plan["created_at"] = row["created_at"]
     return plan
+
+
+PREPARATION_LEVELS = {
+    "not_started",
+    "basics_completed",
+    "mostly_prepared",
+    "revision_only",
+}
+
+
+def _normalise_completed_units(completed_units: set[int] | list[int]) -> list[int]:
+    units = sorted({int(unit) for unit in completed_units})
+    if any(unit not in range(1, 21) for unit in units):
+        raise ValueError("completed_units must contain unit numbers from 1 to 20")
+    return units
+
+
+def save_subject_progress(
+    *,
+    chat_id: int,
+    subject_code: str,
+    preparation_level: str | None = None,
+    completed_units: set[int] | list[int] | None = None,
+    latest_score: float | None = None,
+    latest_score_max: float | None = None,
+) -> dict[str, Any]:
+    subject_code = subject_code.strip().upper()
+    if not subject_code:
+        raise ValueError("subject_code cannot be empty")
+
+    existing = get_subject_progress(chat_id, subject_code)
+    level = preparation_level or (
+        existing["preparation_level"] if existing else "not_started"
+    )
+    if level not in PREPARATION_LEVELS:
+        valid = ", ".join(sorted(PREPARATION_LEVELS))
+        raise ValueError(f"preparation_level must be one of: {valid}")
+
+    if completed_units is None:
+        units = existing["completed_units"] if existing else []
+    else:
+        units = _normalise_completed_units(completed_units)
+
+    score = latest_score
+    score_max = latest_score_max
+    if latest_score is None and existing:
+        score = existing["latest_score"]
+        if latest_score_max is None:
+            score_max = existing["latest_score_max"]
+
+    if score is not None:
+        score = float(score)
+        if score < 0:
+            raise ValueError("latest_score cannot be negative")
+
+    if score_max is not None:
+        score_max = float(score_max)
+        if score_max <= 0:
+            raise ValueError("latest_score_max must be positive")
+        if score is None:
+            raise ValueError("latest_score is required with latest_score_max")
+        if score > score_max:
+            raise ValueError("latest_score cannot exceed latest_score_max")
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO student_subject_progress (
+                chat_id,
+                subject_code,
+                preparation_level,
+                completed_units,
+                latest_score,
+                latest_score_max
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(chat_id, subject_code) DO UPDATE SET
+                preparation_level = excluded.preparation_level,
+                completed_units = excluded.completed_units,
+                latest_score = excluded.latest_score,
+                latest_score_max = excluded.latest_score_max,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                chat_id,
+                subject_code,
+                level,
+                json.dumps(units),
+                score,
+                score_max,
+            ),
+        )
+        connection.commit()
+
+    saved = get_subject_progress(chat_id, subject_code)
+    if saved is None:
+        raise RuntimeError("Subject progress was not saved")
+    return saved
+
+
+def get_subject_progress(
+    chat_id: int,
+    subject_code: str,
+) -> dict[str, Any] | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT
+                chat_id,
+                subject_code,
+                preparation_level,
+                completed_units,
+                latest_score,
+                latest_score_max,
+                created_at,
+                updated_at
+            FROM student_subject_progress
+            WHERE chat_id = ? AND subject_code = ?
+            """,
+            (chat_id, subject_code.strip().upper()),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    result = dict(row)
+    try:
+        result["completed_units"] = _normalise_completed_units(
+            json.loads(result["completed_units"])
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        result["completed_units"] = []
+    return result
+
+
+def get_all_subject_progress(chat_id: int) -> list[dict[str, Any]]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT subject_code
+            FROM student_subject_progress
+            WHERE chat_id = ?
+            ORDER BY subject_code
+            """,
+            (chat_id,),
+        ).fetchall()
+
+    return [
+        progress
+        for row in rows
+        if (progress := get_subject_progress(chat_id, row["subject_code"])) is not None
+    ]

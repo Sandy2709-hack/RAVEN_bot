@@ -7,6 +7,7 @@ from academics import (
     format_exam_rescue_plan,
     format_subject_resources,
     format_subject_syllabus,
+    list_all_subjects,
     list_subjects,
     load_coa_subject,
     load_subject,
@@ -24,7 +25,22 @@ class AcademicsTests(unittest.TestCase):
             self.SUBJECT_CODES,
         )
         self.assertTrue(all(subject["status"] == "available" for subject in subjects))
+        self.assertEqual(
+            {subject["subject_code"]: subject["credits"] for subject in subjects},
+            {
+                "BCS301": 4,
+                "BCS302": 4,
+                "BAS301": 3,
+                "BCC301": 2,
+                "BCS303": 3,
+            },
+        )
+        self.assertTrue(all(isinstance(subject["credits"], int) for subject in subjects))
         self.assertEqual(list_subjects("CSE", 4), [])
+        self.assertEqual(
+            [subject["subject_code"] for subject in list_all_subjects()],
+            self.SUBJECT_CODES,
+        )
 
     def test_generic_subject_loader_supports_every_catalog_subject(self) -> None:
         for subject_code in self.SUBJECT_CODES:
@@ -32,6 +48,7 @@ class AcademicsTests(unittest.TestCase):
                 subject = load_subject(subject_code.lower())
                 self.assertEqual(subject["subject_code"], subject_code)
                 self.assertEqual(subject["status"], "available")
+                self.assertGreater(subject["credits"], 0)
 
         with self.assertRaises(ValueError):
             load_subject("UNKNOWN101")
@@ -144,6 +161,7 @@ class AcademicsTests(unittest.TestCase):
         self.assertIn("Raven pace: Last-day rescue", plan_text)
         self.assertNotIn("Daily study time", plan_text)
         self.assertIn("BCS302", syllabus_text)
+        self.assertIn("Credits: 4", syllabus_text)
         self.assertIn("Gateway Classes", resources_text)
 
         self.assertEqual(syllabus_text, format_subject_syllabus("BCS302"))

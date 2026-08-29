@@ -2,6 +2,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -9,9 +10,38 @@ DATA_DIR = BASE_DIR / "data"
 SUBJECTS_CATALOG_PATH = DATA_DIR / "subjects.json"
 
 
+def _validate_subject_catalog(catalog: dict[str, Any]) -> None:
+    if not isinstance(catalog.get("groups"), list):
+        raise ValueError("Subject catalog must contain a groups list")
+
+    for group in catalog["groups"]:
+        if not isinstance(group.get("subjects"), list):
+            raise ValueError("Every catalog group must contain a subjects list")
+
+        seen_codes: set[str] = set()
+        for subject in group["subjects"]:
+            subject_code = str(subject.get("subject_code", "")).strip().upper()
+            if not subject_code:
+                raise ValueError("Every subject must have a subject_code")
+            if subject_code in seen_codes:
+                raise ValueError(f"Duplicate subject code in catalog: {subject_code}")
+            seen_codes.add(subject_code)
+
+            credits = subject.get("credits")
+            if isinstance(credits, bool) or not isinstance(credits, int):
+                raise ValueError(
+                    f"Credits for {subject_code} must be stored as a JSON integer"
+                )
+            if credits not in range(1, 11):
+                raise ValueError(f"Credits for {subject_code} must be between 1 and 10")
+
+
 def load_subject_catalog() -> dict[str, Any]:
     with SUBJECTS_CATALOG_PATH.open("r", encoding="utf-8") as file:
-        return json.load(file)
+        catalog = json.load(file)
+
+    _validate_subject_catalog(catalog)
+    return catalog
 
 
 def _normalise_label(value: str) -> str:
@@ -50,6 +80,37 @@ def list_subjects(
     return matches
 
 
+def list_all_subjects(
+    feature: str | None = None,
+    available_only: bool = True,
+) -> list[dict[str, Any]]:
+    """Return unique catalog subjects independently of a student's profile."""
+    matches: dict[str, dict[str, Any]] = {}
+    for group in load_subject_catalog()["groups"]:
+        for subject in group["subjects"]:
+            if feature and feature not in subject.get("features", []):
+                continue
+            if available_only and subject["status"] != "available":
+                continue
+            code = subject["subject_code"].upper()
+            if code in matches:
+                continue
+            item = dict(subject)
+            item["semester"] = group["semester"]
+            item["branch_group"] = group["branch_group"]
+            matches[code] = item
+
+    return sorted(
+        matches.values(),
+        key=lambda subject: (
+            subject["status"] != "available",
+            subject.get("semester", 99),
+            subject.get("display_order", 999),
+            subject["subject_code"],
+        ),
+    )
+
+
 def get_subject_metadata(subject_code: str) -> dict[str, Any] | None:
     wanted_code = subject_code.strip().upper()
 
@@ -80,6 +141,7 @@ def load_subject(subject_code: str) -> dict[str, Any]:
 
     subject["short_name"] = metadata["short_name"]
     subject["status"] = metadata["status"]
+    subject["credits"] = metadata["credits"]
     return subject
 
 
@@ -300,6 +362,7 @@ def build_exam_rescue_plan(
         "subject_code": subject["subject_code"],
         "subject_name": subject["subject_name"],
         "subject_short_name": subject["short_name"],
+        "credits": subject["credits"],
         "days": days,
         "daily_minutes": daily_capacity,
         "pace_label": _rescue_pace_label(days),
@@ -330,6 +393,7 @@ def format_exam_rescue_plan(plan: dict[str, Any]) -> str:
         f"Duration: {plan['days']} day(s)",
         f"Raven pace: {plan.get('pace_label', _rescue_pace_label(plan['days']))}",
         f"Target: {plan['target_score']}+ marks",
+        f"Credits: {plan.get('credits', 'Not recorded')}",
         f"Completed units: {completed_text}",
         f"Strategy: {plan['strategy']}",
         "",
@@ -388,6 +452,7 @@ def format_subject_syllabus(subject_code: str) -> str:
     subject = load_subject(subject_code)
     lines = [
         f"📘 {subject['subject_code']} — {subject['subject_name']}",
+        f"Credits: {subject['credits']}",
         "Official AKTU syllabus",
     ]
 
@@ -403,6 +468,7 @@ def format_subject_resources(subject_code: str) -> str:
     subject = load_subject(subject_code)
     lines = [
         f"📖 {subject['short_name']} VERIFIED STARTER RESOURCES",
+        f"Credits: {subject['credits']}",
         "",
         "Free resources matched to the official syllabus",
     ]
@@ -412,12 +478,18 @@ def format_subject_resources(subject_code: str) -> str:
         if not resources:
             continue
         resource = resources[0]
+        search_query = quote_plus(
+            f"{resource['provider']} {subject['short_name']} "
+            f"Unit {unit['number']} {unit['title']}"
+        )
         lines.extend(
             [
                 "",
                 f"Unit {unit['number']} — {unit['title']}",
                 f"Provider: {resource['provider']}",
-                resource["url"],
+                f"Direct: {resource['url']}",
+                "Search fallback: "
+                f"https://www.youtube.com/results?search_query={search_query}",
             ]
         )
 
@@ -429,6 +501,78 @@ def format_subject_resources(subject_code: str) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def get_subject_unit(subject_code: str, unit_number: int) -> dict[str, Any]:
+    subject = load_subject(subject_code)
+    for unit in subject["units"]:
+        if unit["number"] == int(unit_number):
+            return unit
+    raise ValueError(
+        f"{subject['subject_code']} has no Unit {unit_number}; "
+        f"choose Unit 1 to {len(subject['units'])}"
+    )
+
+
+def format_unit_syllabus(subject_code: str, unit_number: int) -> str:
+    subject = load_subject(subject_code)
+    unit = get_subject_unit(subject_code, unit_number)
+    lines = [
+        f"📘 {subject['short_name']} — UNIT {unit['number']}",
+        f"{unit['title']}",
+        f"Subject code: {subject['subject_code']}",
+        f"Credits: {subject['credits']}",
+        "",
+        "Official syllabus topics:",
+    ]
+    lines.extend(f"• {topic}" for topic in unit["topics"])
+    lines.extend(["", f"Source: {subject['syllabus_source']}"])
+    return "\n".join(lines)
+
+
+def format_unit_resources(subject_code: str, unit_number: int) -> str:
+    subject = load_subject(subject_code)
+    unit = get_subject_unit(subject_code, unit_number)
+    resources = unit.get("resources") or []
+    lines = [
+        f"📖 {subject['short_name']} — UNIT {unit['number']} RESOURCES",
+        f"{unit['title']}",
+        f"Subject code: {subject['subject_code']}",
+        f"Credits: {subject['credits']}",
+        "",
+    ]
+
+    if not resources:
+        lines.append("No verified starter resource is stored for this unit yet.")
+    else:
+        for resource in resources:
+            search_query = quote_plus(
+                f"{resource['provider']} {subject['short_name']} "
+                f"Unit {unit['number']} {unit['title']}"
+            )
+            lines.extend(
+                [
+                    f"{resource['provider']} — {resource['title']}",
+                    "Direct link:",
+                    resource["url"],
+                    "YouTube search fallback:",
+                    f"https://www.youtube.com/results?search_query={search_query}",
+                    "",
+                ]
+            )
+
+    lines.append(
+        "Syllabus-matched resource; ranking is not yet PYQ-verified."
+    )
+    return "\n".join(lines).strip()
+
+
+def format_subject_credits(subject_code: str) -> str:
+    subject = load_subject(subject_code)
+    return (
+        f"🎓 {subject['short_name']} ({subject['subject_code']}) carries "
+        f"{subject['credits']} credit(s)."
+    )
 
 
 def format_coa_syllabus() -> str:

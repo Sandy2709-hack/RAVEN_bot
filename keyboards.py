@@ -63,7 +63,9 @@ def subject_picker_keyboard(
     for subject in subjects:
         if subject["status"] == "available":
             marker = "✅"
-            suffix = f"({subject['subject_code']})"
+            credits = subject.get("credits")
+            credit_text = f" • {credits} cr" if credits is not None else ""
+            suffix = f"({subject['subject_code']}){credit_text}"
         else:
             marker = "🔒"
             suffix = "— soon"

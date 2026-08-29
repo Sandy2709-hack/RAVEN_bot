@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from contextlib import closing
 
 import requests
 from telegram import Update
@@ -32,6 +33,7 @@ from academics import (
     list_subjects,
     load_subject,
 )
+
 from academic_router import (
     AcademicRoute,
     PREPARATION_LEVEL_LABELS,
@@ -856,8 +858,10 @@ async def progress_command(
         return
 
     subjects = list_subjects(profile["branch"], profile["semester"])
+
     if not subjects:
         subjects = list_all_subjects()
+
     requested_text = " ".join(context.args).strip()
     subject_code = (
         detect_subject_code(requested_text, subjects)
@@ -922,52 +926,101 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     save_message(chat_id=chat_id, role="user", content=user_message)
 
     profile = get_student_profile(chat_id)
+
     subjects = (
         list_subjects(profile["branch"], profile["semester"])
         if profile
         else []
     )
+    
+    # If an older or unusual profile branch does not match the catalog,
+    # still let Raven recognise explicitly requested subjects.
     if not subjects:
         subjects = list_all_subjects()
+    
     route = route_academic_message(user_message, subjects)
-
+    
+    # Complete a request such as:
+    # User: "Give me Unit 4 resources"
+    # Raven: "Which subject?"
+    # User: "COA"
     pending_request = context.user_data.get("pending_academic_request")
+    
     if pending_request and any(
         phrase in user_message.casefold()
         for phrase in ("never mind", "nevermind", "cancel")
     ):
         context.user_data.pop("pending_academic_request", None)
+    
         route = AcademicRoute(
             kind="direct",
             intent="cancel_pending",
             response="Okay—the pending academic request was cancelled.",
         )
+    
         pending_request = None
-
+    
     if pending_request and route.subject_code:
         units = " ".join(
-            f"Unit {unit}" for unit in pending_request.get("unit_numbers", [])
+            f"Unit {unit}"
+            for unit in pending_request.get("unit_numbers", [])
         )
+    
         route = route_academic_message(
-            f"{pending_request['intent']} {units} {route.subject_code}",
+            (
+                f"{pending_request['intent']} "
+                f"{units} {route.subject_code}"
+            ),
             subjects,
         )
+    
         context.user_data.pop("pending_academic_request", None)
         pending_request = None
-
+    
     if pending_request and route.kind == "none":
-        available = ", ".join(subject["short_name"] for subject in subjects)
+        available = ", ".join(
+            subject["short_name"] for subject in subjects
+        )
+    
         route = AcademicRoute(
             kind="direct",
             intent=pending_request["intent"],
-            unit_numbers=tuple(pending_request.get("unit_numbers", [])),
+            unit_numbers=tuple(
+                pending_request.get("unit_numbers", [])
+            ),
             response=(
-                "I still couldn't match that subject. Choose one of: "
-                f"{available}."
+                "I still couldn't match that subject. "
+                f"Choose one of: {available}."
             ),
         )
-
-    previous_subject = context.user_data.get("last_academic_subject_code")
+    
+    previous_subject = context.user_data.get(
+        "last_academic_subject_code"
+    )
+    
+    if (
+        route.subject_code is None
+        and previous_subject
+        and looks_like_academic_followup(user_message)
+    ):
+        route = route_academic_message(
+            f"{user_message} {previous_subject}",
+            subjects,
+        )
+    
+    if route.subject_code:
+        context.user_data["last_academic_subject_code"] = (
+            route.subject_code
+        )
+    
+    elif (
+        route.kind == "direct"
+        and route.intent in {"resources", "syllabus"}
+    ):
+        context.user_data["pending_academic_request"] = {
+            "intent": route.intent,
+            "unit_numbers": list(route.unit_numbers),
+    }
     if (
         route.subject_code is None
         and previous_subject
@@ -979,11 +1032,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
     if route.subject_code:
         context.user_data["last_academic_subject_code"] = route.subject_code
-    elif route.kind == "direct" and route.intent in {"resources", "syllabus"}:
-        context.user_data["pending_academic_request"] = {
-            "intent": route.intent,
-            "unit_numbers": list(route.unit_numbers),
-        }
 
     if route.kind == "direct":
         reply = route.response or "I couldn't retrieve that academic information."
@@ -1151,7 +1199,7 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 2.4.1 is online")
+    logger.info("Raven Sprint 2.4 is online")
     logger.info("Ollama model: %s", OLLAMA_MODEL)
     logger.info("Database initialized")
     application.run_polling()

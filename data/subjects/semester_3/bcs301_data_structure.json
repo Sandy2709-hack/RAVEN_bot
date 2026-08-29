@@ -1,0 +1,137 @@
+{
+  "subject_code": "BCS301",
+  "subject_name": "Data Structure",
+  "semester": 3,
+  "branch_group": "CSE and allied branches",
+  "syllabus_status": "official",
+  "syllabus_effective_session": "2023-24",
+  "syllabus_source": "https://fms.aktu.ac.in/Resources/aktu/pdf/syllabus/Syllabus2324/B.Tech_2nd_Yr_CSE_v3.pdf",
+  "resource_status": "syllabus-based; PYQ frequency not yet verified",
+  "units": [
+    {
+      "number": 1,
+      "title": "Introduction, Arrays and Linked Lists",
+      "planning_weight": 1.0,
+      "topics": [
+        "Basic terminology, elementary data organization and built-in C data types",
+        "Algorithms, efficiency, time and space complexity",
+        "Big O, Theta and Omega notation; time-space trade-off; abstract data types",
+        "One-dimensional and multidimensional arrays",
+        "Row-major and column-major representation and index formulas",
+        "Array applications and sparse matrices",
+        "Singly, doubly and circular linked lists using arrays and pointers",
+        "Linked-list insertion, deletion and traversal",
+        "Polynomial representation and operations"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 1 - Arrays and Linked Lists - Data Structure One Shot",
+          "url": "https://www.youtube.com/watch?v=aZxDTBYe8yU",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Stacks, Recursion and Queues",
+      "planning_weight": 1.0,
+      "topics": [
+        "Stack abstract data type and push and pop operations",
+        "Array and linked implementations of stacks in C",
+        "Prefix and postfix expressions and postfix evaluation",
+        "Iteration, recursion and tail recursion",
+        "Removing recursion and recursion trade-offs",
+        "Recursive binary search, Fibonacci series and Tower of Hanoi",
+        "Queue creation, insertion, deletion and full and empty conditions",
+        "Circular queues using arrays and linked lists",
+        "Deque and priority queue"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 2 - Stacks, Queues and Recursion - Data Structure One Shot",
+          "url": "https://www.youtube.com/watch?v=z396mFi4DMc",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Searching, Hashing and Sorting",
+      "planning_weight": 1.0,
+      "topics": [
+        "Sequential search",
+        "Indexed sequential search",
+        "Binary search",
+        "Hashing and collision-resolution techniques",
+        "Insertion sort",
+        "Selection sort",
+        "Bubble sort",
+        "Quick sort",
+        "Merge sort",
+        "Heap sort and radix sort"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 3 - Searching and Sorting - Data Structure One Shot",
+          "url": "https://www.youtube.com/watch?v=P3KGR-tx8q0",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Trees",
+      "planning_weight": 1.0,
+      "topics": [
+        "Tree terminology and binary trees",
+        "Array and pointer representations of binary trees",
+        "Binary search trees and strict, complete and extended binary trees",
+        "Inorder, preorder and postorder traversals",
+        "Constructing a binary tree from traversal sequences",
+        "Binary-search-tree insertion, deletion, search and modification",
+        "Threaded binary trees and traversal",
+        "Huffman coding",
+        "AVL trees and B-trees",
+        "Binary heaps"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 4 - Trees - Data Structure One Shot",
+          "url": "https://www.youtube.com/watch?v=KSexOBSMXd0",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Graphs",
+      "planning_weight": 1.0,
+      "topics": [
+        "Graph terminology",
+        "Adjacency-matrix and adjacency-list representations",
+        "Depth-first search and breadth-first search",
+        "Connected components and spanning trees",
+        "Minimum spanning trees using Prim's and Kruskal's algorithms",
+        "Transitive closure using Warshall's algorithm",
+        "Shortest paths using Dijkstra's algorithm"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 5 - Graphs - Data Structure One Shot",
+          "url": "https://www.youtube.com/watch?v=xi0bHpMK-HQ",
+          "access": "free"
+        }
+      ]
+    }
+  ]
+}

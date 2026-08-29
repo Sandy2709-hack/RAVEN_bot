@@ -1,5 +1,5 @@
 {
-  "catalog_version": 1,
+  "catalog_version": 2,
   "university": "Dr. A.P.J. Abdul Kalam Technical University",
   "program": "B.Tech",
   "groups": [
@@ -24,25 +24,48 @@
       "subjects": [
         {
           "subject_code": "BCS301",
-          "subject_name": "Data Structures",
-          "short_name": "Data Structures",
-          "status": "planned",
-          "features": ["exam_rescue", "syllabus", "resources"]
+          "subject_name": "Data Structure",
+          "short_name": "Data Structure",
+          "status": "available",
+          "display_order": 1,
+          "features": ["exam_rescue", "syllabus", "resources"],
+          "data_file": "subjects/semester_3/bcs301_data_structure.json"
         },
         {
           "subject_code": "BCS302",
           "subject_name": "Computer Organization and Architecture",
           "short_name": "COA",
           "status": "available",
+          "display_order": 2,
           "features": ["exam_rescue", "syllabus", "resources"],
           "data_file": "subjects/semester_3/bcs302_coa.json"
+        },
+        {
+          "subject_code": "BAS301",
+          "subject_name": "Technical Communication",
+          "short_name": "Technical Communication",
+          "status": "available",
+          "display_order": 3,
+          "features": ["exam_rescue", "syllabus", "resources"],
+          "data_file": "subjects/semester_3/bas301_technical_communication.json"
+        },
+        {
+          "subject_code": "BCC301",
+          "subject_name": "Cyber Security",
+          "short_name": "Cyber Security",
+          "status": "available",
+          "display_order": 4,
+          "features": ["exam_rescue", "syllabus", "resources"],
+          "data_file": "subjects/semester_3/bcc301_cyber_security.json"
         },
         {
           "subject_code": "BCS303",
           "subject_name": "Discrete Structures and Theory of Logic",
           "short_name": "DSTL",
-          "status": "planned",
-          "features": ["exam_rescue", "syllabus", "resources"]
+          "status": "available",
+          "display_order": 5,
+          "features": ["exam_rescue", "syllabus", "resources"],
+          "data_file": "subjects/semester_3/bcs303_dstl.json"
         }
       ]
     }

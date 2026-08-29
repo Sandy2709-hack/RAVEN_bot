@@ -14,35 +14,44 @@ from academics import (
 
 
 class AcademicsTests(unittest.TestCase):
-    def test_semester_catalog_contains_active_and_planned_subjects(self) -> None:
+    SUBJECT_CODES = ["BCS301", "BCS302", "BAS301", "BCC301", "BCS303"]
+
+    def test_semester_catalog_contains_all_active_subjects(self) -> None:
         subjects = list_subjects("CSE", 3, feature="exam_rescue")
 
         self.assertEqual(
             [subject["subject_code"] for subject in subjects],
-            ["BCS302", "BCS301", "BCS303"],
+            self.SUBJECT_CODES,
         )
-        self.assertEqual(subjects[0]["status"], "available")
-        self.assertEqual(subjects[1]["status"], "planned")
+        self.assertTrue(all(subject["status"] == "available" for subject in subjects))
         self.assertEqual(list_subjects("CSE", 4), [])
 
-    def test_generic_subject_loader_rejects_planned_subjects(self) -> None:
-        subject = load_subject("bcs302")
-        self.assertEqual(subject["short_name"], "COA")
+    def test_generic_subject_loader_supports_every_catalog_subject(self) -> None:
+        for subject_code in self.SUBJECT_CODES:
+            with self.subTest(subject_code=subject_code):
+                subject = load_subject(subject_code.lower())
+                self.assertEqual(subject["subject_code"], subject_code)
+                self.assertEqual(subject["status"], "available")
 
         with self.assertRaises(ValueError):
-            load_subject("BCS301")
+            load_subject("UNKNOWN101")
 
-    def test_official_coa_dataset_has_five_units(self) -> None:
-        subject = load_coa_subject()
+    def test_official_subject_datasets_have_complete_units_and_resources(self) -> None:
+        for subject_code in self.SUBJECT_CODES:
+            with self.subTest(subject_code=subject_code):
+                subject = load_subject(subject_code)
+                self.assertEqual(len(subject["units"]), 5)
+                self.assertTrue(subject["syllabus_source"].startswith("https://"))
 
-        self.assertEqual(subject["subject_code"], "BCS302")
-        self.assertEqual(len(subject["units"]), 5)
-        self.assertTrue(subject["syllabus_source"].startswith("https://"))
+                for expected_number, unit in enumerate(subject["units"], start=1):
+                    self.assertEqual(unit["number"], expected_number)
+                    self.assertTrue(unit["topics"])
+                    self.assertTrue(unit["resources"])
+                    self.assertTrue(
+                        unit["resources"][0]["url"].startswith("https://")
+                    )
 
-        for expected_number, unit in enumerate(subject["units"], start=1):
-            self.assertEqual(unit["number"], expected_number)
-            self.assertTrue(unit["topics"])
-            self.assertTrue(unit["resources"][0]["url"].startswith("https://"))
+        self.assertEqual(load_coa_subject()["subject_code"], "BCS302")
 
     def test_plan_respects_automatic_time_budget(self) -> None:
         plan = build_exam_rescue_plan(
@@ -139,6 +148,26 @@ class AcademicsTests(unittest.TestCase):
 
         self.assertEqual(syllabus_text, format_subject_syllabus("BCS302"))
         self.assertEqual(resources_text, format_subject_resources("BCS302"))
+
+    def test_all_subjects_can_build_and_format_a_rescue_plan(self) -> None:
+        for subject_code in self.SUBJECT_CODES:
+            with self.subTest(subject_code=subject_code):
+                plan = build_exam_rescue_plan(
+                    subject_code=subject_code,
+                    days=3,
+                    completed_units={1},
+                    target_score=50,
+                )
+                scheduled = sum(
+                    day["allocated_minutes"] for day in plan["days_plan"]
+                )
+                self.assertEqual(plan["subject_code"], subject_code)
+                self.assertEqual(scheduled, plan["total_minutes"])
+                self.assertIn(subject_code, format_subject_syllabus(subject_code))
+                self.assertIn(
+                    "VERIFIED STARTER RESOURCES",
+                    format_subject_resources(subject_code),
+                )
 
 
 if __name__ == "__main__":

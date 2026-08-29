@@ -1,28 +1,37 @@
-# Raven Sprint 2.2 — Academic Subject Hierarchy
+# Raven Sprint 2.3 — Complete Semester 3 Academic Catalog
 
-Sprint 2.2 preserves Raven's Ollama chat, memory, student onboarding and the
-working COA Exam Rescue flow. It restructures Academics around reusable
-features and semester-aware subject selection.
+Sprint 2.3 keeps Raven's Ollama chat, memory, student onboarding and reusable
+Academic hierarchy. It activates five Semester 3 subjects across Exam Rescue,
+Syllabus and Resources.
 
-## New in Sprint 2.2
+## Available subjects
 
-- feature-first navigation: Exam Rescue, Syllabus and Resources;
-- subject picker filtered using the student's branch and semester;
-- COA (`BCS302`) available across all three Academic sections;
-- Data Structures (`BCS301`) and DSTL (`BCS303`) shown as coming soon;
-- generic subject loader and formatter ready for future JSON datasets;
-- official AKTU COA syllabus stored as structured JSON;
-- syllabus and Gateway resource browsers inside Telegram;
-- Exam Rescue conversation flow;
-- input validation for the remaining days;
-- automatic Raven pacing based on urgency and target score;
-- completed-unit selection using Telegram buttons;
-- selectable 40+, 50+, 60+ and 70+ targets;
-- deterministic study-plan generation without using Ollama;
-- time-budgeted daily schedules and final revision blocks;
-- saved plans in SQLite;
-- `/lastplan` to retrieve the latest plan;
-- transparent `syllabus-based, not yet PYQ-verified` labels.
+| Code | Subject | Starter-resource provider |
+| --- | --- | --- |
+| `BCS301` | Data Structure | Gateway Classes |
+| `BCS302` | Computer Organization and Architecture (COA) | Gateway Classes |
+| `BAS301` | Technical Communication | Gateway Classes |
+| `BCC301` | Cyber Security | Gateway Classes |
+| `BCS303` | Discrete Structures and Theory of Logic (DSTL) | Multi Atoms Plus |
+
+The subject codes and unit topics follow AKTU's official 2023-24 syllabus
+documents. Every resource is free and mapped to a syllabus unit. Resource
+ordering and rescue-plan allocation remain syllabus-based; Raven does not
+claim PYQ frequency until enough question papers have been collected and
+validated.
+
+## Academic flow
+
+1. Open **Academics**.
+2. Choose **Exam Rescue**, **Syllabus** or **Resources**.
+3. Choose one of the five subjects available for CSE Semester 3.
+4. For Exam Rescue, enter the remaining days, select completed units and pick
+   a target of 40+, 50+, 60+ or 70+.
+5. Raven automatically chooses the pace and creates a deterministic daily plan.
+
+The planner deliberately asks for days, not hours. It calculates a practical
+daily workload from urgency and target score, schedules unit-level study blocks
+and keeps the final revision block inside the total time budget.
 
 ## Project files
 
@@ -32,21 +41,26 @@ features and semester-aware subject selection.
 - `keyboards.py` — reusable inline keyboards.
 - `config.py` — environment settings and validation.
 - `data/subjects.json` — semester and branch-aware subject registry.
-- `data/subjects/semester_3/bcs302_coa.json` — COA syllabus and resources.
-- `tests/` — database and planning-algorithm tests.
+- `data/subjects/semester_3/` — five official-syllabus subject datasets.
+- `tests/` — database, navigation and planning-algorithm tests.
 
-## Upgrade safely from Sprint 1
+## Upgrade safely
 
 1. Stop Raven with `CTRL+C`.
-2. Make a backup or Git commit of your working Sprint 1 folder.
-3. Replace the Python, README and requirements files with the Sprint 2.2 files.
-4. Add the new `data` folder.
+2. Commit or copy your existing Raven folder as a backup.
+3. Replace the Python, README and requirements files with the Sprint 2.3 files.
+4. Replace the `data` folder with the Sprint 2.3 `data` folder.
 5. Keep your existing `.env` and `raven_memory.db`.
-6. Run `py -m pip install -r requirements.txt` inside the active environment.
-7. Start Raven with `py bot.py`.
+6. In the active virtual environment, run:
 
-`init_db()` creates the new `exam_rescue_plans` table automatically. Existing
-messages, memories and student profiles remain compatible.
+```powershell
+py -m pip install -r requirements.txt
+py -m unittest discover -s tests -v
+py bot.py
+```
+
+`init_db()` preserves existing messages, memories, student profiles and saved
+plans while creating any missing tables automatically.
 
 ## Fresh installation
 
@@ -56,33 +70,15 @@ py -m venv .venv
 py -m pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and insert your real Telegram token and Ollama
-model. Never commit `.env` to GitHub.
-
-Make sure Ollama is running, then start Raven:
-
-```powershell
-py bot.py
-```
-
-## Test Exam Rescue
-
-1. Send `/menu`.
-2. Select **Academics**.
-3. Select **Exam Rescue**.
-4. Select **COA (BCS302)** from the subject picker.
-5. Enter remaining days.
-6. Select completed units and press **Continue**.
-7. Choose a target score.
-8. Raven automatically sets the rescue pace and creates the plan.
-9. Use `/lastplan` to retrieve the saved plan.
+Copy `.env.example` to `.env`, insert the Telegram token and configured Ollama
+model, and make sure Ollama is running before `py bot.py`. Never commit `.env`.
 
 ## Commands
 
 - `/start` — begin onboarding or open Raven.
 - `/setup` — create or update the student profile.
 - `/profile` — view the current profile.
-- `/menu` — open the feature menu.
+- `/menu` — open Raven's feature menu.
 - `/lastplan` — retrieve the latest Exam Rescue plan.
 - `/remember <text>` — save a long-term memory.
 - `/memories` — list memories.
@@ -91,15 +87,10 @@ py bot.py
 - `/reset` — clear recent chat history only.
 - `/cancel` — cancel onboarding or Exam Rescue.
 
-## Data limitations
+## Data limitations and next step
 
-The syllabus source and Gateway unit mapping are verified. Topic ordering and
-time allocation are currently syllabus-based planning heuristics. Raven does
-not claim PYQ frequency until a later collector indexes and validates enough
-question papers.
-
-## Next sprint
-
-Sprint 2B will collect public COA question papers, extract questions, map them
-to official topics and replace heuristic coverage weights with real repeat and
-marks data.
+The current datasets combine official AKTU syllabus topics with verified free
+starter videos. They do not contain Gateway-app notes or private JSS papers.
+The next Academic data sprint should collect public PYQs, extract questions,
+map them to official topics and replace neutral planning weights with evidence-
+based repeat and marks data.

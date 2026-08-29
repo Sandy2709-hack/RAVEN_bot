@@ -388,7 +388,7 @@ async def start_exam_rescue(
     if metadata["status"] != "available":
         await query.edit_message_text(
             f"🔒 {metadata['short_name']} Exam Rescue is coming soon.\n\n"
-            "COA is the active Semester 3 subject for now.",
+            "Choose one of the currently available subjects.",
             reply_markup=back_to_subjects_keyboard("exam_rescue"),
         )
         return ConversationHandler.END
@@ -698,7 +698,7 @@ async def academic_callback(
     if metadata["status"] != "available":
         await query.edit_message_text(
             f"🔒 {metadata['short_name']} is coming soon in this section.\n\n"
-            "COA is fully available right now.",
+            "Choose one of the currently available subjects.",
             reply_markup=back_to_subjects_keyboard(feature),
         )
         return
@@ -940,7 +940,7 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 2.2 is online")
+    logger.info("Raven Sprint 2.3 is online")
     logger.info("Ollama model: %s", OLLAMA_MODEL)
     logger.info("Database initialized")
     application.run_polling()

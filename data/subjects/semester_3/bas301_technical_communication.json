@@ -1,0 +1,127 @@
+{
+  "subject_code": "BAS301",
+  "subject_name": "Technical Communication",
+  "semester": 3,
+  "branch_group": "CSE and allied branches",
+  "syllabus_status": "official",
+  "syllabus_effective_session": "2023-24",
+  "syllabus_source": "https://fms.aktu.ac.in/Resources/aktu/pdf/syllabus/Syllabus2324/Technical%20Communication_2023-2024.pdf",
+  "resource_status": "syllabus-based; PYQ frequency not yet verified",
+  "units": [
+    {
+      "number": 1,
+      "title": "Fundamentals of Communication and Voice Dynamics",
+      "planning_weight": 1.0,
+      "topics": [
+        "Role and purpose of communication",
+        "Types and flow of communication",
+        "Barriers to communication",
+        "The seven Cs of communication",
+        "Code and content and stimulus and response",
+        "Vowel and consonant sounds",
+        "Rising and falling tone"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 1 - Fundamentals of Communication - One Shot",
+          "url": "https://www.youtube.com/watch?v=cYi1WzF5WBU",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Career Building",
+      "planning_weight": 1.0,
+      "topics": [
+        "CV and resume writing",
+        "Interview skills",
+        "Group discussion",
+        "Effective professional profiling",
+        "Networking and relationship building",
+        "Statement of purpose",
+        "Seminar and conference paper writing",
+        "Writing and presenting an expert technical lecture"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 2 - Career Building - One Shot",
+          "url": "https://www.youtube.com/watch?v=3eGk6bMwEY8",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Presentation",
+      "planning_weight": 1.0,
+      "topics": [
+        "Thesis and project-report presentation",
+        "Technical-proposal presentation",
+        "Process and preparation for pitching ideas",
+        "Structure of an effective pitch",
+        "Speech delivery with passion and poise",
+        "Using illustrations effectively"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 3 - Presentation - One Shot",
+          "url": "https://www.youtube.com/watch?v=I1jaJ8BVIo0",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Leadership",
+      "planning_weight": 1.0,
+      "topics": [
+        "Leadership communication",
+        "Social competence in context",
+        "Understanding feelings, intentions and behaviours",
+        "Giving and receiving feedback",
+        "Tact and intelligence",
+        "Emotional intelligence and trust",
+        "Thinking skills"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 4 - Leadership - One Shot",
+          "url": "https://www.youtube.com/watch?v=ekNw1sGJF6g",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Digital Communication and Personality",
+      "planning_weight": 1.0,
+      "topics": [
+        "Writing social-media content",
+        "Emails, webinars, podcasts and blogs",
+        "Ethical use of social media",
+        "Speech and personality",
+        "Personality types and concepts",
+        "Views of Maslow, Freud, Vivekananda and Jung",
+        "Personality assessment"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 5 - Digital Communication and Personality - One Shot",
+          "url": "https://www.youtube.com/watch?v=a8xvM_XZ3vk",
+          "access": "free"
+        }
+      ]
+    }
+  ]
+}

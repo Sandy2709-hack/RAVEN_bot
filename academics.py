@@ -43,6 +43,7 @@ def list_subjects(
     matches.sort(
         key=lambda subject: (
             subject["status"] != "available",
+            subject.get("display_order", 999),
             subject["subject_code"],
         )
     )

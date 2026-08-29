@@ -1,0 +1,138 @@
+{
+  "subject_code": "BCS303",
+  "subject_name": "Discrete Structures and Theory of Logic",
+  "semester": 3,
+  "branch_group": "CSE and allied branches",
+  "syllabus_status": "official",
+  "syllabus_effective_session": "2023-24",
+  "syllabus_source": "https://fms.aktu.ac.in/Resources/aktu/pdf/syllabus/Syllabus2324/B.Tech_2nd_Yr_CSE_v3.pdf",
+  "resource_status": "syllabus-based; PYQ frequency not yet verified",
+  "units": [
+    {
+      "number": 1,
+      "title": "Sets, Relations and Lattices",
+      "planning_weight": 1.0,
+      "topics": [
+        "Set theory",
+        "Combination of sets",
+        "Definition and operations of relations",
+        "Properties, composition and equality of relations",
+        "Recursive and order relations",
+        "Partially ordered sets",
+        "Hasse diagrams",
+        "Bounded and complemented lattices",
+        "Distributive and modular lattices",
+        "Complete lattices"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Multi Atoms Plus",
+          "title": "DSTL One-Shot Playlist - Unit 1",
+          "url": "https://www.youtube.com/playlist?list=PL49mRA0Y_C8siHtxUdC7jpu1PH79Sb-uD",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Functions and Boolean Algebra",
+      "planning_weight": 1.0,
+      "topics": [
+        "Definition and classification of functions",
+        "Operations on functions",
+        "Growth of functions",
+        "Axioms and theorems of Boolean algebra",
+        "Boolean-algebra manipulation",
+        "Simplification of Boolean expressions",
+        "Karnaugh maps"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Multi Atoms Plus",
+          "title": "DSTL One-Shot Playlist - Unit 2",
+          "url": "https://www.youtube.com/playlist?list=PL49mRA0Y_C8siHtxUdC7jpu1PH79Sb-uD",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Propositional and Predicate Logic",
+      "planning_weight": 1.0,
+      "topics": [
+        "Propositions and truth tables",
+        "Tautology, satisfiability and contradiction",
+        "Algebra of propositions",
+        "Theory of inference",
+        "Predicate logic",
+        "First-order predicates",
+        "Well-formed formulas",
+        "Quantifiers",
+        "Inference in predicate logic"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Multi Atoms Plus",
+          "title": "DSTL One-Shot Playlist - Unit 3",
+          "url": "https://www.youtube.com/playlist?list=PL49mRA0Y_C8siHtxUdC7jpu1PH79Sb-uD",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Algebraic Structures",
+      "planning_weight": 1.0,
+      "topics": [
+        "Algebraic structures",
+        "Groups, subgroups and order of a group",
+        "Cyclic groups",
+        "Cosets",
+        "Lagrange's theorem",
+        "Normal subgroups",
+        "Permutation and symmetric groups",
+        "Group homomorphisms",
+        "Rings",
+        "Fields"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Multi Atoms Plus",
+          "title": "DSTL One-Shot Playlist - Unit 4",
+          "url": "https://www.youtube.com/playlist?list=PL49mRA0Y_C8siHtxUdC7jpu1PH79Sb-uD",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Graph Theory and Combinatorics",
+      "planning_weight": 1.0,
+      "topics": [
+        "Graph definitions and terminology",
+        "Graph representations",
+        "Multigraphs and bipartite graphs",
+        "Planar graphs",
+        "Graph isomorphism and homeomorphism",
+        "Euler and Hamilton paths",
+        "Graph coloring",
+        "Combinatorics",
+        "Counting techniques",
+        "Pigeonhole principle"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Multi Atoms Plus",
+          "title": "DSTL One-Shot Playlist - Unit 5",
+          "url": "https://www.youtube.com/playlist?list=PL49mRA0Y_C8siHtxUdC7jpu1PH79Sb-uD",
+          "access": "free"
+        }
+      ]
+    }
+  ]
+}

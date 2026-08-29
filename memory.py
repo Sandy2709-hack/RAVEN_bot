@@ -97,6 +97,8 @@ def init_db() -> None:
                 chat_id INTEGER NOT NULL,
                 subject_code TEXT NOT NULL,
                 days INTEGER NOT NULL,
+                -- Retained internally for compatibility with Sprint 2 databases.
+                -- Students are no longer asked to provide this value.
                 hours_per_day REAL NOT NULL,
                 target_score INTEGER NOT NULL,
                 completed_units TEXT NOT NULL DEFAULT '[]',
@@ -390,7 +392,7 @@ def save_exam_rescue_plan(chat_id: int, plan: dict[str, Any]) -> int:
     required = {
         "subject_code",
         "days",
-        "hours_per_day",
+        "daily_minutes",
         "target_score",
         "completed_units",
     }
@@ -420,7 +422,7 @@ def save_exam_rescue_plan(chat_id: int, plan: dict[str, Any]) -> int:
                 chat_id,
                 plan["subject_code"],
                 plan["days"],
-                plan["hours_per_day"],
+                plan["daily_minutes"] / 60,
                 plan["target_score"],
                 completed_json,
                 plan_json,
@@ -433,19 +435,31 @@ def save_exam_rescue_plan(chat_id: int, plan: dict[str, Any]) -> int:
 
 def get_latest_exam_rescue_plan(
     chat_id: int,
-    subject_code: str = "BCS302",
+    subject_code: str | None = None,
 ) -> dict[str, Any] | None:
     with get_connection() as connection:
-        row = connection.execute(
-            """
-            SELECT id, plan_json, created_at
-            FROM exam_rescue_plans
-            WHERE chat_id = ? AND subject_code = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (chat_id, subject_code),
-        ).fetchone()
+        if subject_code:
+            row = connection.execute(
+                """
+                SELECT id, plan_json, created_at
+                FROM exam_rescue_plans
+                WHERE chat_id = ? AND subject_code = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (chat_id, subject_code.upper()),
+            ).fetchone()
+        else:
+            row = connection.execute(
+                """
+                SELECT id, plan_json, created_at
+                FROM exam_rescue_plans
+                WHERE chat_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (chat_id,),
+            ).fetchone()
 
     if not row:
         return None

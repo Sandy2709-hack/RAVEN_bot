@@ -6,12 +6,85 @@ from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-COA_DATA_PATH = DATA_DIR / "coa_bcs302.json"
+SUBJECTS_CATALOG_PATH = DATA_DIR / "subjects.json"
+
+
+def load_subject_catalog() -> dict[str, Any]:
+    with SUBJECTS_CATALOG_PATH.open("r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def _normalise_label(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
+
+
+def list_subjects(
+    branch: str,
+    semester: int,
+    feature: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return the catalog subjects that match a student's profile."""
+    normalised_branch = _normalise_label(branch)
+    matches = []
+
+    for group in load_subject_catalog()["groups"]:
+        aliases = {_normalise_label(alias) for alias in group["branch_aliases"]}
+        if group["semester"] != semester or normalised_branch not in aliases:
+            continue
+
+        for subject in group["subjects"]:
+            if feature and feature not in subject.get("features", []):
+                continue
+            item = dict(subject)
+            item["semester"] = group["semester"]
+            item["branch_group"] = group["branch_group"]
+            matches.append(item)
+
+    matches.sort(
+        key=lambda subject: (
+            subject["status"] != "available",
+            subject["subject_code"],
+        )
+    )
+    return matches
+
+
+def get_subject_metadata(subject_code: str) -> dict[str, Any] | None:
+    wanted_code = subject_code.strip().upper()
+
+    for group in load_subject_catalog()["groups"]:
+        for subject in group["subjects"]:
+            if subject["subject_code"].upper() == wanted_code:
+                item = dict(subject)
+                item["semester"] = group["semester"]
+                item["branch_group"] = group["branch_group"]
+                return item
+
+    return None
+
+
+def load_subject(subject_code: str) -> dict[str, Any]:
+    metadata = get_subject_metadata(subject_code)
+    if not metadata:
+        raise ValueError(f"Unknown subject code: {subject_code}")
+    if metadata["status"] != "available" or not metadata.get("data_file"):
+        raise ValueError(f"Subject {metadata['subject_code']} is not available yet")
+
+    data_path = (DATA_DIR / metadata["data_file"]).resolve()
+    if DATA_DIR.resolve() not in data_path.parents:
+        raise ValueError("Subject data path must stay inside the data directory")
+
+    with data_path.open("r", encoding="utf-8") as file:
+        subject = json.load(file)
+
+    subject["short_name"] = metadata["short_name"]
+    subject["status"] = metadata["status"]
+    return subject
 
 
 def load_coa_subject() -> dict[str, Any]:
-    with COA_DATA_PATH.open("r", encoding="utf-8") as file:
-        return json.load(file)
+    """Backward-compatible helper for existing COA imports."""
+    return load_subject("BCS302")
 
 
 def _distribute_minutes(total: int, weights: list[float]) -> list[int]:
@@ -45,29 +118,62 @@ def _topic_summary(topics: list[str], maximum: int = 3) -> str:
     return summary
 
 
+def _automatic_daily_minutes(days: int, target_score: int) -> int:
+    """Choose a practical rescue workload without asking for study hours."""
+    if days == 1:
+        base_minutes = 300
+    elif days <= 3:
+        base_minutes = 240
+    elif days <= 7:
+        base_minutes = 180
+    elif days <= 14:
+        base_minutes = 120
+    else:
+        base_minutes = 90
+
+    target_adjustment = {
+        40: -30,
+        50: 0,
+        60: 30,
+        70: 60,
+    }[target_score]
+    return max(60, base_minutes + target_adjustment)
+
+
+def _rescue_pace_label(days: int) -> str:
+    if days == 1:
+        return "Last-day rescue"
+    if days <= 3:
+        return "Emergency sprint"
+    if days <= 7:
+        return "Focused sprint"
+    if days <= 14:
+        return "Steady preparation"
+    return "Comfortable preparation"
+
+
 def build_exam_rescue_plan(
     *,
+    subject_code: str,
     days: int,
-    hours_per_day: float,
     completed_units: set[int] | list[int],
     target_score: int,
 ) -> dict[str, Any]:
     if days not in range(1, 31):
         raise ValueError("days must be between 1 and 30")
 
-    if not 0.5 <= hours_per_day <= 12:
-        raise ValueError("hours_per_day must be between 0.5 and 12")
-
     if target_score not in {40, 50, 60, 70}:
         raise ValueError("target_score must be 40, 50, 60, or 70")
 
-    completed = {int(unit) for unit in completed_units}
-    if not completed.issubset({1, 2, 3, 4, 5}):
-        raise ValueError("completed_units can contain only unit numbers 1-5")
-
-    subject = load_coa_subject()
+    subject = load_subject(subject_code)
     units = subject["units"]
-    daily_capacity = max(30, round(hours_per_day * 60))
+    valid_unit_numbers = {unit["number"] for unit in units}
+    completed = {int(unit) for unit in completed_units}
+    if not completed.issubset(valid_unit_numbers):
+        valid_text = ", ".join(map(str, sorted(valid_unit_numbers)))
+        raise ValueError(f"completed_units can contain only: {valid_text}")
+
+    daily_capacity = _automatic_daily_minutes(days, target_score)
     total_minutes = daily_capacity * days
 
     revision_ratio = {
@@ -140,7 +246,8 @@ def build_exam_rescue_plan(
                 continue
 
             block_minutes = min(remaining, available, 90)
-            resource = unit["resources"][0]
+            resources = unit.get("resources") or []
+            resource = resources[0] if resources else {}
             status = "Review" if unit["number"] in completed else "Study"
             action = (
                 f"{status} Unit {unit['number']}: {unit['title']}"
@@ -154,8 +261,8 @@ def build_exam_rescue_plan(
                 "title": action,
                 "minutes": block_minutes,
                 "topics": _topic_summary(unit["topics"]),
-                "resource_title": resource["title"],
-                "resource_url": resource["url"],
+                "resource_title": resource.get("title"),
+                "resource_url": resource.get("url"),
             }
             day_plans[current_day]["items"].append(item)
             day_plans[current_day]["allocated_minutes"] += block_minutes
@@ -173,8 +280,8 @@ def build_exam_rescue_plan(
             "title": "Final recall and available question practice",
             "minutes": revision_minutes,
             "topics": (
-                "Revise formulas, diagrams, instruction cycles, cache mappings, "
-                "DMA and weak topics. Solve any available COA questions without notes."
+                "Revise formulas, diagrams, definitions and weak topics. "
+                f"Solve any available {subject['short_name']} questions without notes."
             ),
         }
     )
@@ -188,11 +295,13 @@ def build_exam_rescue_plan(
     }[target_score]
 
     return {
-        "version": 1,
+        "version": 3,
         "subject_code": subject["subject_code"],
         "subject_name": subject["subject_name"],
+        "subject_short_name": subject["short_name"],
         "days": days,
-        "hours_per_day": hours_per_day,
+        "daily_minutes": daily_capacity,
+        "pace_label": _rescue_pace_label(days),
         "target_score": target_score,
         "completed_units": sorted(completed),
         "total_minutes": total_minutes,
@@ -210,12 +319,15 @@ def build_exam_rescue_plan(
 def format_exam_rescue_plan(plan: dict[str, Any]) -> str:
     completed = plan.get("completed_units") or []
     completed_text = ", ".join(map(str, completed)) if completed else "None"
+    short_name = plan.get("subject_short_name")
+    if not short_name:
+        short_name = "COA" if plan.get("subject_code") == "BCS302" else plan["subject_code"]
 
     lines = [
-        "🚨 COA EXAM RESCUE PLAN",
+        f"🚨 {short_name} EXAM RESCUE PLAN",
         "",
         f"Duration: {plan['days']} day(s)",
-        f"Daily study time: {plan['hours_per_day']:g} hour(s)",
+        f"Raven pace: {plan.get('pace_label', _rescue_pace_label(plan['days']))}",
         f"Target: {plan['target_score']}+ marks",
         f"Completed units: {completed_text}",
         f"Strategy: {plan['strategy']}",
@@ -229,7 +341,7 @@ def format_exam_rescue_plan(plan: dict[str, Any]) -> str:
             [
                 "",
                 f"Time warning: Unit(s) {units} receive only minimal coverage. "
-                "Increase your daily hours if possible.",
+                "Raven kept them to quick recall because the rescue window is tight.",
             ]
         )
 
@@ -271,8 +383,8 @@ def format_exam_rescue_plan(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_coa_syllabus() -> str:
-    subject = load_coa_subject()
+def format_subject_syllabus(subject_code: str) -> str:
+    subject = load_subject(subject_code)
     lines = [
         f"📘 {subject['subject_code']} — {subject['subject_name']}",
         "Official AKTU syllabus",
@@ -286,21 +398,24 @@ def format_coa_syllabus() -> str:
     return "\n".join(lines)
 
 
-def format_coa_resources() -> str:
-    subject = load_coa_subject()
+def format_subject_resources(subject_code: str) -> str:
+    subject = load_subject(subject_code)
     lines = [
-        "📖 COA VERIFIED STARTER RESOURCES",
+        f"📖 {subject['short_name']} VERIFIED STARTER RESOURCES",
         "",
-        "Provider: Gateway Classes",
-        "Access: Free YouTube videos",
+        "Free resources matched to the official syllabus",
     ]
 
     for unit in subject["units"]:
-        resource = unit["resources"][0]
+        resources = unit.get("resources") or []
+        if not resources:
+            continue
+        resource = resources[0]
         lines.extend(
             [
                 "",
                 f"Unit {unit['number']} — {unit['title']}",
+                f"Provider: {resource['provider']}",
                 resource["url"],
             ]
         )
@@ -313,3 +428,13 @@ def format_coa_resources() -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def format_coa_syllabus() -> str:
+    """Backward-compatible wrapper for older code and tests."""
+    return format_subject_syllabus("BCS302")
+
+
+def format_coa_resources() -> str:
+    """Backward-compatible wrapper for older code and tests."""
+    return format_subject_resources("BCS302")

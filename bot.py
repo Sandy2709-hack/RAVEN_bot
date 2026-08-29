@@ -25,16 +25,20 @@ from config import (
 )
 from academics import (
     build_exam_rescue_plan,
-    format_coa_resources,
-    format_coa_syllabus,
     format_exam_rescue_plan,
+    format_subject_resources,
+    format_subject_syllabus,
+    list_subjects,
+    load_subject,
 )
 from keyboards import (
     academics_menu_keyboard,
     back_to_academics_keyboard,
     back_to_menu_keyboard,
+    back_to_subjects_keyboard,
     completed_units_keyboard,
     main_menu_keyboard,
+    subject_picker_keyboard,
     target_score_keyboard,
 )
 from memory import (
@@ -66,10 +70,9 @@ logger = logging.getLogger("raven")
     PROFILE_YEAR,
     PROFILE_SEMESTER,
     RESCUE_DAYS,
-    RESCUE_HOURS,
     RESCUE_COMPLETED,
     RESCUE_TARGET,
-) = range(8)
+) = range(7)
 
 
 SYSTEM_PROMPT = """
@@ -364,14 +367,44 @@ async def start_exam_rescue(
         )
         return ConversationHandler.END
 
+    subject_code = query.data.rsplit(":", maxsplit=1)[1].upper()
+    profile_subjects = {
+        subject["subject_code"]: subject
+        for subject in list_subjects(
+            profile["branch"],
+            profile["semester"],
+            feature="exam_rescue",
+        )
+    }
+    metadata = profile_subjects.get(subject_code)
+
+    if not metadata:
+        await query.edit_message_text(
+            "That subject is not available for your current branch and semester.",
+            reply_markup=back_to_subjects_keyboard("exam_rescue"),
+        )
+        return ConversationHandler.END
+
+    if metadata["status"] != "available":
+        await query.edit_message_text(
+            f"🔒 {metadata['short_name']} Exam Rescue is coming soon.\n\n"
+            "COA is the active Semester 3 subject for now.",
+            reply_markup=back_to_subjects_keyboard("exam_rescue"),
+        )
+        return ConversationHandler.END
+
+    subject = load_subject(subject_code)
+    unit_numbers = [unit["number"] for unit in subject["units"]]
     context.user_data["rescue_draft"] = {
-        "subject_code": "BCS302",
+        "subject_code": subject_code,
+        "subject_short_name": subject["short_name"],
+        "unit_numbers": unit_numbers,
         "completed_units": set(),
     }
     await query.edit_message_text(
-        "🚨 COA EXAM RESCUE\n\n"
-        "Raven will create a syllabus-based plan using the official AKTU BCS302 "
-        "curriculum and verified Gateway unit videos.\n\n"
+        f"🚨 {subject['short_name']} EXAM RESCUE\n\n"
+        f"Raven will create a syllabus-based plan for {subject['subject_code']} "
+        "using the official AKTU curriculum and verified free resources.\n\n"
         "How many days remain before the exam?\n"
         "Send a number from 1 to 30.\n\n"
         "Send /cancel to stop."
@@ -402,41 +435,12 @@ async def receive_rescue_days(
         return ConversationHandler.END
 
     draft["days"] = days
+    short_name = draft["subject_short_name"]
     await update.effective_message.reply_text(
-        "How many hours can you realistically study COA each day?\n"
-        "Send a value from 0.5 to 12. Example: 2 or 2.5"
-    )
-    return RESCUE_HOURS
-
-
-async def receive_rescue_hours(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-) -> int:
-    try:
-        hours = float(update.effective_message.text.strip())
-    except ValueError:
-        hours = 0
-
-    if not 0.5 <= hours <= 12:
-        await update.effective_message.reply_text(
-            "Please send realistic daily study hours from 0.5 to 12."
-        )
-        return RESCUE_HOURS
-
-    draft = context.user_data.get("rescue_draft")
-    if not draft:
-        await update.effective_message.reply_text(
-            "Your Exam Rescue session expired. Open /menu and start it again."
-        )
-        return ConversationHandler.END
-
-    draft["hours_per_day"] = hours
-    await update.effective_message.reply_text(
-        "Which COA units have you already completed?\n\n"
+        f"Which {short_name} units have you already completed?\n\n"
         "Tap units to select or unselect them, then press Continue. "
         "Leave every unit unchecked if you are starting from zero.",
-        reply_markup=completed_units_keyboard(set()),
+        reply_markup=completed_units_keyboard(set(), draft["unit_numbers"]),
     )
     return RESCUE_COMPLETED
 
@@ -456,6 +460,12 @@ async def toggle_completed_unit(
         return ConversationHandler.END
 
     unit_number = int(query.data.rsplit(":", maxsplit=1)[1])
+    if unit_number not in draft["unit_numbers"]:
+        await query.edit_message_text(
+            "That unit is not part of this subject. Start Exam Rescue again."
+        )
+        return RESCUE_COMPLETED
+
     selected = draft.setdefault("completed_units", set())
 
     if unit_number in selected:
@@ -465,10 +475,10 @@ async def toggle_completed_unit(
 
     selected_text = ", ".join(map(str, sorted(selected))) if selected else "None"
     await query.edit_message_text(
-        "Which COA units have you already completed?\n\n"
+        f"Which {draft['subject_short_name']} units have you already completed?\n\n"
         f"Selected: {selected_text}\n\n"
         "Tap units to change the selection, then press Continue.",
-        reply_markup=completed_units_keyboard(selected),
+        reply_markup=completed_units_keyboard(selected, draft["unit_numbers"]),
     )
     return RESCUE_COMPLETED
 
@@ -480,14 +490,15 @@ async def finish_completed_units(
     query = update.callback_query
     await query.answer()
 
-    if not context.user_data.get("rescue_draft"):
+    draft = context.user_data.get("rescue_draft")
+    if not draft:
         await query.edit_message_text(
             "Your Exam Rescue session expired. Open /menu and start it again."
         )
         return ConversationHandler.END
 
     await query.edit_message_text(
-        "What score are you targeting in COA?\n\n"
+        f"What score are you targeting in {draft['subject_short_name']}?\n\n"
         "Choose the minimum score Raven should plan for:",
         reply_markup=target_score_keyboard(),
     )
@@ -510,8 +521,8 @@ async def generate_rescue_plan(
 
     target_score = int(query.data.rsplit(":", maxsplit=1)[1])
     plan = build_exam_rescue_plan(
+        subject_code=draft["subject_code"],
         days=draft["days"],
-        hours_per_day=draft["hours_per_day"],
         completed_units=draft["completed_units"],
         target_score=target_score,
     )
@@ -519,7 +530,7 @@ async def generate_rescue_plan(
     context.user_data.pop("rescue_draft", None)
 
     await query.edit_message_text(
-        f"✅ COA Exam Rescue plan #{plan_id} created."
+        f"✅ {plan['subject_short_name']} Exam Rescue plan #{plan_id} created."
     )
     await send_in_chunks(query.message, format_exam_rescue_plan(plan))
     await query.message.reply_text(
@@ -539,7 +550,7 @@ async def cancel_exam_rescue(
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             "Exam Rescue cancelled.",
-            reply_markup=back_to_academics_keyboard(),
+            reply_markup=back_to_subjects_keyboard("exam_rescue"),
         )
     else:
         await update.effective_message.reply_text(
@@ -557,7 +568,8 @@ async def last_plan_command(
 
     if not plan:
         await update.effective_message.reply_text(
-            "You do not have a saved COA plan yet. Open /menu → Academics → Exam Rescue."
+            "You do not have a saved Exam Rescue plan yet. "
+            "Open /menu → Academics → Exam Rescue."
         )
         return
 
@@ -583,6 +595,40 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
+    if action in {"exam_rescue", "syllabus", "resources"}:
+        profile = get_student_profile(update.effective_chat.id)
+        if not profile:
+            await query.edit_message_text(
+                "You need a student profile first. Send /setup."
+            )
+            return
+
+        subjects = list_subjects(
+            profile["branch"],
+            profile["semester"],
+            feature=action,
+        )
+        if not subjects:
+            await query.edit_message_text(
+                "Raven does not have an Academic catalog for your branch and "
+                "semester yet.",
+                reply_markup=back_to_academics_keyboard(),
+            )
+            return
+
+        section_titles = {
+            "exam_rescue": "🚨 EXAM RESCUE",
+            "syllabus": "📘 SYLLABUS",
+            "resources": "📖 RESOURCES",
+        }
+        await query.edit_message_text(
+            f"{section_titles[action]}\n\n"
+            f"Semester {profile['semester']} • {profile['branch']}\n"
+            "Choose a subject:",
+            reply_markup=subject_picker_keyboard(action, subjects),
+        )
+        return
+
     if action == "profile":
         profile = get_student_profile(update.effective_chat.id)
         text = format_profile(profile) if profile else "Send /setup to create your profile."
@@ -594,10 +640,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "💬 CHAT\n\nSend any normal text message and Raven will reply through "
             "your configured Ollama model."
         )
-    elif action == "syllabus":
-        text = format_coa_syllabus()
-    elif action == "resources":
-        text = format_coa_resources()
     elif action == "attendance":
         text = "📊 Attendance tracking is planned after the Academic resource foundation."
     elif action == "updates":
@@ -611,13 +653,67 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     else:
         text = "That Raven feature is not available yet."
 
-    academic_actions = {"syllabus", "resources", "attendance", "updates"}
+    academic_actions = {"attendance", "updates"}
     keyboard = (
         back_to_academics_keyboard()
         if action in academic_actions
         else back_to_menu_keyboard()
     )
     await query.edit_message_text(text, reply_markup=keyboard)
+
+
+async def academic_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    query = update.callback_query
+    await query.answer()
+    _, feature, subject_code = query.data.split(":", maxsplit=2)
+    subject_code = subject_code.upper()
+
+    profile = get_student_profile(update.effective_chat.id)
+    if not profile:
+        await query.edit_message_text(
+            "You need a student profile first. Send /setup."
+        )
+        return
+
+    profile_subjects = {
+        subject["subject_code"]: subject
+        for subject in list_subjects(
+            profile["branch"],
+            profile["semester"],
+            feature=feature,
+        )
+    }
+    metadata = profile_subjects.get(subject_code)
+
+    if not metadata:
+        await query.edit_message_text(
+            "That subject is not available for your current branch and semester.",
+            reply_markup=back_to_subjects_keyboard(feature),
+        )
+        return
+
+    if metadata["status"] != "available":
+        await query.edit_message_text(
+            f"🔒 {metadata['short_name']} is coming soon in this section.\n\n"
+            "COA is fully available right now.",
+            reply_markup=back_to_subjects_keyboard(feature),
+        )
+        return
+
+    if feature == "syllabus":
+        text = format_subject_syllabus(subject_code)
+    elif feature == "resources":
+        text = format_subject_resources(subject_code)
+    else:
+        text = "Open Exam Rescue again to start a plan."
+
+    await query.edit_message_text(
+        text,
+        reply_markup=back_to_subjects_keyboard(feature),
+    )
 
 
 async def remember_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -781,20 +877,17 @@ def build_application() -> Application:
         entry_points=[
             CallbackQueryHandler(
                 start_exam_rescue,
-                pattern=r"^menu:exam_rescue$",
+                pattern=r"^academic:exam_rescue:[A-Z0-9]+$",
             )
         ],
         states={
             RESCUE_DAYS: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_rescue_days)
             ],
-            RESCUE_HOURS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_rescue_hours)
-            ],
             RESCUE_COMPLETED: [
                 CallbackQueryHandler(
                     toggle_completed_unit,
-                    pattern=r"^rescue:unit:[1-5]$",
+                    pattern=r"^rescue:unit:\d+$",
                 ),
                 CallbackQueryHandler(
                     finish_completed_units,
@@ -828,6 +921,12 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("forget", forget_command))
     application.add_handler(CommandHandler("forgetall", forgetall_command))
     application.add_handler(CommandHandler("reset", reset_command))
+    application.add_handler(
+        CallbackQueryHandler(
+            academic_callback,
+            pattern=r"^academic:(syllabus|resources):[A-Z0-9]+$",
+        )
+    )
     application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu:"))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
@@ -841,7 +940,7 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 2 is online")
+    logger.info("Raven Sprint 2.2 is online")
     logger.info("Ollama model: %s", OLLAMA_MODEL)
     logger.info("Database initialized")
     application.run_polling()

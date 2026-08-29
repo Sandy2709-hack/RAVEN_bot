@@ -79,7 +79,8 @@ class MemoryDatabaseTests(unittest.TestCase):
         plan = {
             "subject_code": "BCS302",
             "days": 2,
-            "hours_per_day": 2.0,
+            "daily_minutes": 270,
+            "pace_label": "Emergency sprint",
             "target_score": 60,
             "completed_units": [1],
             "days_plan": [],
@@ -92,6 +93,18 @@ class MemoryDatabaseTests(unittest.TestCase):
         self.assertEqual(saved["plan_id"], plan_id)
         self.assertEqual(saved["target_score"], 60)
         self.assertEqual(saved["completed_units"], [1])
+        self.assertEqual(saved["daily_minutes"], 270)
+
+        second_plan = dict(plan)
+        second_plan["subject_code"] = "BCS301"
+        second_plan["target_score"] = 50
+        second_id = memory.save_exam_rescue_plan(27, second_plan)
+
+        latest = memory.get_latest_exam_rescue_plan(27)
+        latest_coa = memory.get_latest_exam_rescue_plan(27, "bcs302")
+        self.assertEqual(latest["plan_id"], second_id)
+        self.assertEqual(latest["subject_code"], "BCS301")
+        self.assertEqual(latest_coa["plan_id"], plan_id)
 
 
 if __name__ == "__main__":

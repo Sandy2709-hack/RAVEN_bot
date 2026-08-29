@@ -1,0 +1,50 @@
+{
+  "catalog_version": 1,
+  "university": "Dr. A.P.J. Abdul Kalam Technical University",
+  "program": "B.Tech",
+  "groups": [
+    {
+      "branch_group": "CSE and allied branches",
+      "branch_aliases": [
+        "CSE",
+        "CSE Core",
+        "Computer Science and Engineering",
+        "Computer Science",
+        "CSE AI",
+        "CSE (AI)",
+        "CSE AIML",
+        "CSE (AI & ML)",
+        "CSE Data Science",
+        "CSE (Data Science)",
+        "Computer Science and Engineering (Artificial Intelligence)",
+        "Computer Science and Engineering (Artificial Intelligence and Machine Learning)",
+        "Computer Science and Engineering (Data Science)"
+      ],
+      "semester": 3,
+      "subjects": [
+        {
+          "subject_code": "BCS301",
+          "subject_name": "Data Structures",
+          "short_name": "Data Structures",
+          "status": "planned",
+          "features": ["exam_rescue", "syllabus", "resources"]
+        },
+        {
+          "subject_code": "BCS302",
+          "subject_name": "Computer Organization and Architecture",
+          "short_name": "COA",
+          "status": "available",
+          "features": ["exam_rescue", "syllabus", "resources"],
+          "data_file": "subjects/semester_3/bcs302_coa.json"
+        },
+        {
+          "subject_code": "BCS303",
+          "subject_name": "Discrete Structures and Theory of Logic",
+          "short_name": "DSTL",
+          "status": "planned",
+          "features": ["exam_rescue", "syllabus", "resources"]
+        }
+      ]
+    }
+  ]
+}

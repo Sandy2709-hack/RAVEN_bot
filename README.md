@@ -1,15 +1,21 @@
-# Raven Sprint 2 — COA Exam Rescue
+# Raven Sprint 2.2 — Academic Subject Hierarchy
 
-Sprint 2 preserves Raven's Ollama chat, conversation history, long-term memory,
-student onboarding and five-pillar menu. It adds Raven's first complete
-Academic workflow for Semester 3 COA (`BCS302`).
+Sprint 2.2 preserves Raven's Ollama chat, memory, student onboarding and the
+working COA Exam Rescue flow. It restructures Academics around reusable
+features and semester-aware subject selection.
 
-## New in Sprint 2
+## New in Sprint 2.2
 
+- feature-first navigation: Exam Rescue, Syllabus and Resources;
+- subject picker filtered using the student's branch and semester;
+- COA (`BCS302`) available across all three Academic sections;
+- Data Structures (`BCS301`) and DSTL (`BCS303`) shown as coming soon;
+- generic subject loader and formatter ready for future JSON datasets;
 - official AKTU COA syllabus stored as structured JSON;
 - syllabus and Gateway resource browsers inside Telegram;
 - Exam Rescue conversation flow;
-- input validation for days and daily study hours;
+- input validation for the remaining days;
+- automatic Raven pacing based on urgency and target score;
 - completed-unit selection using Telegram buttons;
 - selectable 40+, 50+, 60+ and 70+ targets;
 - deterministic study-plan generation without using Ollama;
@@ -21,18 +27,19 @@ Academic workflow for Semester 3 COA (`BCS302`).
 ## Project files
 
 - `bot.py` — Telegram commands, conversations, menus and Ollama chat.
-- `academics.py` — COA dataset loading and Exam Rescue algorithm.
+- `academics.py` — subject catalog, dataset loading and Exam Rescue algorithm.
 - `memory.py` — SQLite schema, profiles, memories and saved plans.
 - `keyboards.py` — reusable inline keyboards.
 - `config.py` — environment settings and validation.
-- `data/coa_bcs302.json` — official syllabus topics and Gateway links.
+- `data/subjects.json` — semester and branch-aware subject registry.
+- `data/subjects/semester_3/bcs302_coa.json` — COA syllabus and resources.
 - `tests/` — database and planning-algorithm tests.
 
 ## Upgrade safely from Sprint 1
 
 1. Stop Raven with `CTRL+C`.
 2. Make a backup or Git commit of your working Sprint 1 folder.
-3. Replace the Python, README and requirements files with the Sprint 2 files.
+3. Replace the Python, README and requirements files with the Sprint 2.2 files.
 4. Add the new `data` folder.
 5. Keep your existing `.env` and `raven_memory.db`.
 6. Run `py -m pip install -r requirements.txt` inside the active environment.
@@ -62,12 +69,13 @@ py bot.py
 
 1. Send `/menu`.
 2. Select **Academics**.
-3. Select **COA Exam Rescue**.
-4. Enter remaining days.
-5. Enter realistic daily hours.
+3. Select **Exam Rescue**.
+4. Select **COA (BCS302)** from the subject picker.
+5. Enter remaining days.
 6. Select completed units and press **Continue**.
 7. Choose a target score.
-8. Use `/lastplan` to retrieve the saved plan.
+8. Raven automatically sets the rescue pace and creates the plan.
+9. Use `/lastplan` to retrieve the saved plan.
 
 ## Commands
 
@@ -75,7 +83,7 @@ py bot.py
 - `/setup` — create or update the student profile.
 - `/profile` — view the current profile.
 - `/menu` — open the feature menu.
-- `/lastplan` — retrieve the latest COA rescue plan.
+- `/lastplan` — retrieve the latest Exam Rescue plan.
 - `/remember <text>` — save a long-term memory.
 - `/memories` — list memories.
 - `/forget <id>` — delete one memory.

@@ -25,13 +25,13 @@ def academics_menu_keyboard() -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "🚨 COA Exam Rescue",
+                    "🚨 Exam Rescue",
                     callback_data="menu:exam_rescue",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "📘 COA Syllabus",
+                    "📘 Syllabus",
                     callback_data="menu:syllabus",
                 ),
                 InlineKeyboardButton(
@@ -54,6 +54,41 @@ def academics_menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def subject_picker_keyboard(
+    feature: str,
+    subjects: list[dict],
+) -> InlineKeyboardMarkup:
+    rows = []
+
+    for subject in subjects:
+        if subject["status"] == "available":
+            marker = "✅"
+            suffix = f"({subject['subject_code']})"
+        else:
+            marker = "🔒"
+            suffix = "— soon"
+
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    f"{marker} {subject['short_name']} {suffix}",
+                    callback_data=(
+                        f"academic:{feature}:{subject['subject_code']}"
+                    ),
+                )
+            ]
+        )
+
+    rows.append([InlineKeyboardButton("⬅️ Academics", callback_data="menu:academics")])
+    return InlineKeyboardMarkup(rows)
+
+
+def back_to_subjects_keyboard(feature: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("⬅️ Subjects", callback_data=f"menu:{feature}")]]
+    )
+
+
 def back_to_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("⬅️ Main Menu", callback_data="menu:main")]]
@@ -66,12 +101,16 @@ def back_to_academics_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def completed_units_keyboard(selected_units: set[int]) -> InlineKeyboardMarkup:
+def completed_units_keyboard(
+    selected_units: set[int],
+    unit_numbers: list[int] | None = None,
+) -> InlineKeyboardMarkup:
     rows = []
+    unit_numbers = unit_numbers or list(range(1, 6))
 
-    for start in (1, 3, 5):
+    for index in range(0, len(unit_numbers), 2):
         row = []
-        for unit in range(start, min(start + 2, 6)):
+        for unit in unit_numbers[index:index + 2]:
             marker = "✅" if unit in selected_units else "⬜"
             row.append(
                 InlineKeyboardButton(

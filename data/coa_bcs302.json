@@ -1,0 +1,135 @@
+{
+  "subject_code": "BCS302",
+  "subject_name": "Computer Organization and Architecture",
+  "semester": 3,
+  "branch_group": "CSE and allied branches",
+  "syllabus_status": "official",
+  "syllabus_effective_session": "2023-24",
+  "syllabus_source": "https://fms.aktu.ac.in/Resources/aktu/pdf/syllabus/Syllabus2324/B.Tech_2nd_Yr_CSE_v3.pdf",
+  "resource_status": "syllabus-based; PYQ frequency not yet verified",
+  "units": [
+    {
+      "number": 1,
+      "title": "Introduction and Processor Organization",
+      "planning_weight": 1.0,
+      "topics": [
+        "Functional units of digital systems and their interconnections",
+        "Buses, bus architecture and types of buses",
+        "Bus arbitration",
+        "Register, bus and memory transfer",
+        "Processor organization",
+        "General-register organization",
+        "Stack organization",
+        "Addressing modes"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 1 - Introduction - COA One Shot",
+          "url": "https://www.youtube.com/watch?v=X-MlljRcOCQ",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Arithmetic and Logic Unit",
+      "planning_weight": 1.15,
+      "topics": [
+        "Look-ahead carry adders",
+        "Signed-operand multiplication",
+        "Booth's algorithm",
+        "Array multiplier",
+        "Division and logical operations",
+        "Floating-point arithmetic",
+        "ALU design",
+        "IEEE standard for floating-point numbers"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 2 - Arithmetic and Logic Unit - COA One Shot",
+          "url": "https://www.youtube.com/watch?v=oHlmYQW0rvs",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Control Unit",
+      "planning_weight": 1.15,
+      "topics": [
+        "Instruction types and formats",
+        "Instruction cycles and subcycles",
+        "Fetch and execution cycles",
+        "Micro-operations and execution of a complete instruction",
+        "Program control",
+        "Reduced Instruction Set Computer (RISC)",
+        "Pipelining",
+        "Hardwired and microprogrammed control",
+        "Microprogram sequencing",
+        "Horizontal and vertical microprogramming"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 3 - Control Unit - COA One Shot",
+          "url": "https://www.youtube.com/watch?v=kiCH77Vhi1g",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Memory",
+      "planning_weight": 1.2,
+      "topics": [
+        "Memory concepts and hierarchy",
+        "Semiconductor RAM",
+        "2D and 2 1/2D memory organization",
+        "ROM",
+        "Cache concepts, design issues and performance",
+        "Address mapping and replacement",
+        "Magnetic disks, tapes and optical disks",
+        "Virtual-memory concepts and implementation"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 4 - Memory - COA One Shot",
+          "url": "https://www.youtube.com/watch?v=4xNJtQAnlSE",
+          "access": "free"
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Input/Output Organization",
+      "planning_weight": 1.0,
+      "topics": [
+        "Peripheral devices",
+        "I/O interfaces and ports",
+        "Interrupt hardware",
+        "Interrupt types and exceptions",
+        "Programmed I/O and interrupt-initiated I/O",
+        "Direct Memory Access (DMA)",
+        "I/O channels and processors",
+        "Synchronous and asynchronous serial communication",
+        "Standard communication interfaces"
+      ],
+      "resources": [
+        {
+          "type": "video",
+          "provider": "Gateway Classes",
+          "title": "Unit 5 - Input/Output - COA One Shot",
+          "url": "https://www.youtube.com/watch?v=kW6y0tANx6E",
+          "access": "free"
+        }
+      ]
+    }
+  ]
+}

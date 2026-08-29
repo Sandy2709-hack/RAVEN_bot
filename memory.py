@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -86,6 +87,28 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_profiles_college_branch
             ON student_profiles(college, branch)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS exam_rescue_plans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                subject_code TEXT NOT NULL,
+                days INTEGER NOT NULL,
+                hours_per_day REAL NOT NULL,
+                target_score INTEGER NOT NULL,
+                completed_units TEXT NOT NULL DEFAULT '[]',
+                plan_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_rescue_plans_chat_subject
+            ON exam_rescue_plans(chat_id, subject_code, created_at)
             """
         )
 
@@ -361,3 +384,73 @@ def delete_student_profile(chat_id: int) -> bool:
         )
         connection.commit()
         return cursor.rowcount > 0
+
+
+def save_exam_rescue_plan(chat_id: int, plan: dict[str, Any]) -> int:
+    required = {
+        "subject_code",
+        "days",
+        "hours_per_day",
+        "target_score",
+        "completed_units",
+    }
+
+    if not required.issubset(plan):
+        missing = ", ".join(sorted(required - set(plan)))
+        raise ValueError(f"Exam Rescue plan is missing: {missing}")
+
+    plan_json = json.dumps(plan, ensure_ascii=False)
+    completed_json = json.dumps(plan["completed_units"])
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO exam_rescue_plans (
+                chat_id,
+                subject_code,
+                days,
+                hours_per_day,
+                target_score,
+                completed_units,
+                plan_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                chat_id,
+                plan["subject_code"],
+                plan["days"],
+                plan["hours_per_day"],
+                plan["target_score"],
+                completed_json,
+                plan_json,
+            ),
+        )
+        plan_id = cursor.lastrowid
+        connection.commit()
+        return int(plan_id)
+
+
+def get_latest_exam_rescue_plan(
+    chat_id: int,
+    subject_code: str = "BCS302",
+) -> dict[str, Any] | None:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, plan_json, created_at
+            FROM exam_rescue_plans
+            WHERE chat_id = ? AND subject_code = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (chat_id, subject_code),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    plan = json.loads(row["plan_json"])
+    plan["plan_id"] = row["id"]
+    plan["created_at"] = row["created_at"]
+    return plan

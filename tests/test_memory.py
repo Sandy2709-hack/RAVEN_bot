@@ -75,6 +75,24 @@ class MemoryDatabaseTests(unittest.TestCase):
         updated = memory.get_student_profile(27)
         self.assertEqual(updated["semester"], 4)
 
+    def test_exam_rescue_plan_is_saved_and_retrieved(self) -> None:
+        plan = {
+            "subject_code": "BCS302",
+            "days": 2,
+            "hours_per_day": 2.0,
+            "target_score": 60,
+            "completed_units": [1],
+            "days_plan": [],
+        }
+
+        plan_id = memory.save_exam_rescue_plan(27, plan)
+        saved = memory.get_latest_exam_rescue_plan(27)
+
+        self.assertGreater(plan_id, 0)
+        self.assertEqual(saved["plan_id"], plan_id)
+        self.assertEqual(saved["target_score"], 60)
+        self.assertEqual(saved["completed_units"], [1])
+
 
 if __name__ == "__main__":
     unittest.main()

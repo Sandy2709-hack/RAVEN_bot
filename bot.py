@@ -23,10 +23,19 @@ from config import (
     TELEGRAM_BOT_TOKEN,
     validate_settings,
 )
+from academics import (
+    build_exam_rescue_plan,
+    format_coa_resources,
+    format_coa_syllabus,
+    format_exam_rescue_plan,
+)
 from keyboards import (
     academics_menu_keyboard,
+    back_to_academics_keyboard,
     back_to_menu_keyboard,
+    completed_units_keyboard,
     main_menu_keyboard,
+    target_score_keyboard,
 )
 from memory import (
     clear_chat_history,
@@ -34,10 +43,12 @@ from memory import (
     delete_memory,
     get_memories,
     get_recent_messages,
+    get_latest_exam_rescue_plan,
     get_student_profile,
     init_db,
     save_memory,
     save_message,
+    save_exam_rescue_plan,
     save_student_profile,
 )
 
@@ -49,7 +60,16 @@ logging.basicConfig(
 logger = logging.getLogger("raven")
 
 
-PROFILE_COLLEGE, PROFILE_BRANCH, PROFILE_YEAR, PROFILE_SEMESTER = range(4)
+(
+    PROFILE_COLLEGE,
+    PROFILE_BRANCH,
+    PROFILE_YEAR,
+    PROFILE_SEMESTER,
+    RESCUE_DAYS,
+    RESCUE_HOURS,
+    RESCUE_COMPLETED,
+    RESCUE_TARGET,
+) = range(8)
 
 
 SYSTEM_PROMPT = """
@@ -137,8 +157,20 @@ def format_profile(profile: dict) -> str:
 
 
 async def send_in_chunks(message, text: str, chunk_size: int = 3800) -> None:
-    for start in range(0, len(text), chunk_size):
-        await message.reply_text(text[start : start + chunk_size])
+    remaining = text
+
+    while remaining:
+        if len(remaining) <= chunk_size:
+            chunk = remaining
+            remaining = ""
+        else:
+            split_at = remaining.rfind("\n", 0, chunk_size)
+            if split_at < chunk_size // 2:
+                split_at = chunk_size
+            chunk = remaining[:split_at]
+            remaining = remaining[split_at:].lstrip("\n")
+
+        await message.reply_text(chunk)
 
 
 async def begin_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -274,8 +306,7 @@ async def receive_semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     await update.effective_message.reply_text(
         "✅ Your Raven profile is ready.\n\n"
-        "This is Sprint 1: the profile and navigation foundation. "
-        "We will connect the first working Academic feature next.",
+        "Your profile will be used to personalize Academic features and future updates.",
         reply_markup=main_menu_keyboard(),
     )
     return ConversationHandler.END
@@ -319,6 +350,220 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
+async def start_exam_rescue(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    profile = get_student_profile(update.effective_chat.id)
+    if not profile:
+        await query.edit_message_text(
+            "You need a student profile before creating a plan. Send /setup."
+        )
+        return ConversationHandler.END
+
+    context.user_data["rescue_draft"] = {
+        "subject_code": "BCS302",
+        "completed_units": set(),
+    }
+    await query.edit_message_text(
+        "🚨 COA EXAM RESCUE\n\n"
+        "Raven will create a syllabus-based plan using the official AKTU BCS302 "
+        "curriculum and verified Gateway unit videos.\n\n"
+        "How many days remain before the exam?\n"
+        "Send a number from 1 to 30.\n\n"
+        "Send /cancel to stop."
+    )
+    return RESCUE_DAYS
+
+
+async def receive_rescue_days(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    try:
+        days = int(update.effective_message.text.strip())
+    except ValueError:
+        days = 0
+
+    if days not in range(1, 31):
+        await update.effective_message.reply_text(
+            "Please send the number of remaining days from 1 to 30."
+        )
+        return RESCUE_DAYS
+
+    draft = context.user_data.get("rescue_draft")
+    if not draft:
+        await update.effective_message.reply_text(
+            "Your Exam Rescue session expired. Open /menu and start it again."
+        )
+        return ConversationHandler.END
+
+    draft["days"] = days
+    await update.effective_message.reply_text(
+        "How many hours can you realistically study COA each day?\n"
+        "Send a value from 0.5 to 12. Example: 2 or 2.5"
+    )
+    return RESCUE_HOURS
+
+
+async def receive_rescue_hours(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    try:
+        hours = float(update.effective_message.text.strip())
+    except ValueError:
+        hours = 0
+
+    if not 0.5 <= hours <= 12:
+        await update.effective_message.reply_text(
+            "Please send realistic daily study hours from 0.5 to 12."
+        )
+        return RESCUE_HOURS
+
+    draft = context.user_data.get("rescue_draft")
+    if not draft:
+        await update.effective_message.reply_text(
+            "Your Exam Rescue session expired. Open /menu and start it again."
+        )
+        return ConversationHandler.END
+
+    draft["hours_per_day"] = hours
+    await update.effective_message.reply_text(
+        "Which COA units have you already completed?\n\n"
+        "Tap units to select or unselect them, then press Continue. "
+        "Leave every unit unchecked if you are starting from zero.",
+        reply_markup=completed_units_keyboard(set()),
+    )
+    return RESCUE_COMPLETED
+
+
+async def toggle_completed_unit(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    query = update.callback_query
+    await query.answer()
+    draft = context.user_data.get("rescue_draft")
+
+    if not draft:
+        await query.edit_message_text(
+            "Your Exam Rescue session expired. Open /menu and start it again."
+        )
+        return ConversationHandler.END
+
+    unit_number = int(query.data.rsplit(":", maxsplit=1)[1])
+    selected = draft.setdefault("completed_units", set())
+
+    if unit_number in selected:
+        selected.remove(unit_number)
+    else:
+        selected.add(unit_number)
+
+    selected_text = ", ".join(map(str, sorted(selected))) if selected else "None"
+    await query.edit_message_text(
+        "Which COA units have you already completed?\n\n"
+        f"Selected: {selected_text}\n\n"
+        "Tap units to change the selection, then press Continue.",
+        reply_markup=completed_units_keyboard(selected),
+    )
+    return RESCUE_COMPLETED
+
+
+async def finish_completed_units(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    if not context.user_data.get("rescue_draft"):
+        await query.edit_message_text(
+            "Your Exam Rescue session expired. Open /menu and start it again."
+        )
+        return ConversationHandler.END
+
+    await query.edit_message_text(
+        "What score are you targeting in COA?\n\n"
+        "Choose the minimum score Raven should plan for:",
+        reply_markup=target_score_keyboard(),
+    )
+    return RESCUE_TARGET
+
+
+async def generate_rescue_plan(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    query = update.callback_query
+    await query.answer()
+    draft = context.user_data.get("rescue_draft")
+
+    if not draft:
+        await query.edit_message_text(
+            "Your Exam Rescue session expired. Open /menu and start it again."
+        )
+        return ConversationHandler.END
+
+    target_score = int(query.data.rsplit(":", maxsplit=1)[1])
+    plan = build_exam_rescue_plan(
+        days=draft["days"],
+        hours_per_day=draft["hours_per_day"],
+        completed_units=draft["completed_units"],
+        target_score=target_score,
+    )
+    plan_id = save_exam_rescue_plan(update.effective_chat.id, plan)
+    context.user_data.pop("rescue_draft", None)
+
+    await query.edit_message_text(
+        f"✅ COA Exam Rescue plan #{plan_id} created."
+    )
+    await send_in_chunks(query.message, format_exam_rescue_plan(plan))
+    await query.message.reply_text(
+        "Return to Academics when you are ready:",
+        reply_markup=back_to_academics_keyboard(),
+    )
+    return ConversationHandler.END
+
+
+async def cancel_exam_rescue(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> int:
+    context.user_data.pop("rescue_draft", None)
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            "Exam Rescue cancelled.",
+            reply_markup=back_to_academics_keyboard(),
+        )
+    else:
+        await update.effective_message.reply_text(
+            "Exam Rescue cancelled. Open /menu whenever you want to try again."
+        )
+
+    return ConversationHandler.END
+
+
+async def last_plan_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    plan = get_latest_exam_rescue_plan(update.effective_chat.id)
+
+    if not plan:
+        await update.effective_message.reply_text(
+            "You do not have a saved COA plan yet. Open /menu → Academics → Exam Rescue."
+        )
+        return
+
+    await send_in_chunks(update.effective_message, format_exam_rescue_plan(plan))
+
+
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -349,10 +594,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "💬 CHAT\n\nSend any normal text message and Raven will reply through "
             "your configured Ollama model."
         )
-    elif action == "exam_rescue":
-        text = "🚨 Exam Rescue will be the first complete Academic feature in Sprint 2."
+    elif action == "syllabus":
+        text = format_coa_syllabus()
     elif action == "resources":
-        text = "📖 The verified resource library will be connected after Exam Rescue."
+        text = format_coa_resources()
     elif action == "attendance":
         text = "📊 Attendance tracking is planned after the Academic resource foundation."
     elif action == "updates":
@@ -366,7 +611,13 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     else:
         text = "That Raven feature is not available yet."
 
-    await query.edit_message_text(text, reply_markup=back_to_menu_keyboard())
+    academic_actions = {"syllabus", "resources", "attendance", "updates"}
+    keyboard = (
+        back_to_academics_keyboard()
+        if action in academic_actions
+        else back_to_menu_keyboard()
+    )
+    await query.edit_message_text(text, reply_markup=keyboard)
 
 
 async def remember_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -526,9 +777,52 @@ def build_application() -> Application:
         allow_reentry=True,
     )
 
+    exam_rescue = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(
+                start_exam_rescue,
+                pattern=r"^menu:exam_rescue$",
+            )
+        ],
+        states={
+            RESCUE_DAYS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_rescue_days)
+            ],
+            RESCUE_HOURS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_rescue_hours)
+            ],
+            RESCUE_COMPLETED: [
+                CallbackQueryHandler(
+                    toggle_completed_unit,
+                    pattern=r"^rescue:unit:[1-5]$",
+                ),
+                CallbackQueryHandler(
+                    finish_completed_units,
+                    pattern=r"^rescue:units_done$",
+                ),
+            ],
+            RESCUE_TARGET: [
+                CallbackQueryHandler(
+                    generate_rescue_plan,
+                    pattern=r"^rescue:target:(40|50|60|70)$",
+                )
+            ],
+        },
+        fallbacks=[
+            CommandHandler("cancel", cancel_exam_rescue),
+            CallbackQueryHandler(
+                cancel_exam_rescue,
+                pattern=r"^rescue:cancel$",
+            ),
+        ],
+        allow_reentry=True,
+    )
+
     application.add_handler(onboarding)
+    application.add_handler(exam_rescue)
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("lastplan", last_plan_command))
     application.add_handler(CommandHandler("remember", remember_command))
     application.add_handler(CommandHandler("memories", memories_command))
     application.add_handler(CommandHandler("forget", forget_command))
@@ -547,7 +841,7 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 1 is online")
+    logger.info("Raven Sprint 2 is online")
     logger.info("Ollama model: %s", OLLAMA_MODEL)
     logger.info("Database initialized")
     application.run_polling()

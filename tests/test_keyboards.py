@@ -19,7 +19,11 @@ fake_telegram.InlineKeyboardButton = FakeInlineKeyboardButton
 fake_telegram.InlineKeyboardMarkup = FakeInlineKeyboardMarkup
 sys.modules.setdefault("telegram", fake_telegram)
 
-from keyboards import academics_menu_keyboard, subject_picker_keyboard
+from keyboards import (
+    academics_menu_keyboard,
+    attendance_today_keyboard,
+    subject_picker_keyboard,
+)
 
 
 class KeyboardTests(unittest.TestCase):
@@ -49,6 +53,27 @@ class KeyboardTests(unittest.TestCase):
         self.assertEqual(keyboard[0][0].callback_data, "academic:syllabus:BCS302")
         self.assertIn("✅", keyboard[0][0].text)
         self.assertIn("🔒", keyboard[1][0].text)
+
+    def test_attendance_checklist_shows_saved_status(self) -> None:
+        entries = [
+            {
+                "id": "c3-fr-2",
+                "period_label": "P2",
+                "time_label": "09:45-10:45",
+                "subject": {"short_name": "COA"},
+            }
+        ]
+        keyboard = attendance_today_keyboard(
+            entries,
+            {"c3-fr-2": "attended"},
+            "2026-08-21",
+        ).inline_keyboard
+
+        self.assertIn("✅ COA", keyboard[0][0].text)
+        self.assertEqual(
+            keyboard[0][0].callback_data,
+            "att:cycle:20260821:c3-fr-2",
+        )
 
 
 if __name__ == "__main__":

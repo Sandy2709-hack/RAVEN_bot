@@ -165,6 +165,124 @@ class MemoryDatabaseTests(unittest.TestCase):
                 latest_score_max=30,
             )
 
+    def test_attendance_settings_and_baselines_are_saved(self) -> None:
+        settings = memory.save_attendance_settings(
+            chat_id=27,
+            section="cse3",
+            batch_group="c1",
+            semester_start="2026-08-17",
+            semester_end="2026-12-20",
+            cia_dates=["2026-09-15", "2026-11-20"],
+            setup_complete=True,
+        )
+        memory.save_attendance_baseline(
+            chat_id=27,
+            subject_code="bcs302",
+            subject_name="Computer Organization and Architecture",
+            short_name="COA",
+            attended=14,
+            conducted=18,
+            estimated=True,
+            display_order=1,
+        )
+
+        baseline = memory.get_attendance_baseline(27, "BCS302")
+        self.assertEqual(settings["section"], "CSE3")
+        self.assertEqual(settings["batch_group"], "C1")
+        self.assertEqual(settings["cia_dates"], ["2026-09-15", "2026-11-20"])
+        self.assertTrue(settings["setup_complete"])
+        self.assertEqual(baseline["attended"], 14)
+        self.assertEqual(baseline["absent"], 4)
+        self.assertTrue(baseline["estimated"])
+
+    def test_attendance_events_update_totals_without_counting_cancellations(self) -> None:
+        memory.save_attendance_settings(
+            chat_id=27,
+            section="CSE3",
+            batch_group="C1",
+            semester_start="2026-08-17",
+            setup_complete=True,
+        )
+        memory.save_attendance_baseline(
+            chat_id=27,
+            subject_code="BCS302",
+            subject_name="Computer Organization and Architecture",
+            short_name="COA",
+            attended=14,
+            conducted=18,
+        )
+        event = memory.save_attendance_event(
+            chat_id=27,
+            subject_code="BCS302",
+            class_date="2026-08-21",
+            timetable_entry_id="c3-fr-2",
+            period_label="P2",
+            class_count=1,
+            status="attended",
+        )
+        memory.save_attendance_event(
+            chat_id=27,
+            subject_code="BCS302",
+            class_date="2026-08-22",
+            timetable_entry_id="manual-cancelled",
+            period_label="P1",
+            class_count=1,
+            status="cancelled",
+        )
+        memory.save_attendance_event(
+            chat_id=27,
+            subject_code="BCS302",
+            class_date="2026-08-23",
+            timetable_entry_id="manual-pending",
+            period_label="P1",
+            class_count=1,
+            status="planned_bunk",
+            source="bunk_command",
+        )
+
+        totals = memory.get_attendance_totals(27)[0]
+        self.assertEqual(totals["attended"], 15)
+        self.assertEqual(totals["absent"], 4)
+
+        memory.update_attendance_event_status(
+            chat_id=27,
+            event_id=event["id"],
+            status="absent",
+        )
+        updated = memory.get_attendance_totals(27)[0]
+        self.assertEqual(updated["attended"], 14)
+        self.assertEqual(updated["absent"], 5)
+
+    def test_attendance_event_can_be_undone(self) -> None:
+        memory.save_attendance_settings(
+            chat_id=27,
+            section="CSE3",
+            batch_group="C2",
+            semester_start="2026-08-17",
+            setup_complete=True,
+        )
+        memory.save_attendance_baseline(
+            chat_id=27,
+            subject_code="BCS301",
+            subject_name="Data Structures",
+            short_name="DS",
+            attended=0,
+            conducted=0,
+        )
+        event = memory.save_attendance_event(
+            chat_id=27,
+            subject_code="BCS301",
+            class_date="2026-08-18",
+            timetable_entry_id="c3-tu-1",
+            period_label="P1",
+            class_count=1,
+            status="absent",
+        )
+
+        undone = memory.undo_last_attendance_event(27)
+        self.assertEqual(undone["id"], event["id"])
+        self.assertEqual(memory.get_recent_attendance_events(27), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from contextlib import closing
 
 import requests
 from telegram import Update
@@ -14,6 +13,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from attendance import india_now
 
 from config import (
     LONG_TERM_MEMORY_LIMIT,
@@ -33,7 +33,6 @@ from academics import (
     list_subjects,
     load_subject,
 )
-
 from academic_router import (
     AcademicRoute,
     PREPARATION_LEVEL_LABELS,
@@ -43,6 +42,13 @@ from academic_router import (
     infer_preparation_level,
     looks_like_academic_followup,
     route_academic_message,
+)
+from attendance_handlers import (
+    attendance_action_callback,
+    attendance_conversation_handler,
+    attendance_event_callback,
+    bunk_command,
+    register_attendance_jobs,
 )
 from keyboards import (
     academics_menu_keyboard,
@@ -110,6 +116,70 @@ Raven's local catalog. Use its exact syllabus, credits, progress and resource
 links. Never claim you cannot access information explicitly present there.
 Never invent missing academic data or PYQ importance.
 """.strip()
+
+def build_live_time_context() -> str:
+    now = india_now()
+
+    return (
+        "\n\nTRUSTED LIVE DATE AND TIME:\n"
+        f"- Date: {now.strftime('%A, %d %B %Y')}\n"
+        f"- Time: {now.strftime('%I:%M %p')}\n"
+        "- Timezone: Asia/Kolkata (IST)\n"
+        "Use this information whenever the user asks about dates, "
+        "days, time, today, tomorrow or scheduling. Never guess them."
+    )
+
+
+def get_direct_datetime_reply(message: str) -> str | None:
+    text = " ".join(
+        message.casefold()
+        .replace("’", "'")
+        .replace("?", "")
+        .split()
+    )
+
+    asks_date = any(
+        phrase in text
+        for phrase in (
+            "what is today's date",
+            "what is todays date",
+            "today's date",
+            "todays date",
+            "what date is it",
+            "what date is today",
+            "what day is it",
+            "what day is today",
+            "what day and date",
+            "which day is today",
+            "current date",
+        )
+    )
+
+    asks_time = any(
+        phrase in text
+        for phrase in (
+            "what time is it",
+            "current time",
+            "time right now",
+            "what is the time",
+        )
+    )
+
+    if not asks_date and not asks_time:
+        return None
+
+    now = india_now()
+
+    if asks_date and asks_time:
+        return (
+            f"It is {now.strftime('%A, %d %B %Y')}, "
+            f"and the current time is {now.strftime('%I:%M %p')} IST."
+        )
+
+    if asks_date:
+        return f"Today is {now.strftime('%A, %d %B %Y')}."
+
+    return f"The current time is {now.strftime('%I:%M %p')} IST."
 
 
 def ask_ollama(messages: list[dict[str, str]]) -> str:
@@ -677,7 +747,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "and preparation data are retrieved before Ollama answers."
         )
     elif action == "attendance":
-        text = "📊 Attendance tracking is planned after the Academic resource foundation."
+        text = "📊 Send /attendance to open Attendance Intelligence."
     elif action == "updates":
         text = "📢 Verified JSS/AKTU notices and deadline alerts are planned for a later sprint."
     elif action == "projects":
@@ -858,10 +928,8 @@ async def progress_command(
         return
 
     subjects = list_subjects(profile["branch"], profile["semester"])
-
     if not subjects:
         subjects = list_all_subjects()
-
     requested_text = " ".join(context.args).strip()
     subject_code = (
         detect_subject_code(requested_text, subjects)
@@ -925,102 +993,64 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("User chat_id=%s sent a message", chat_id)
     save_message(chat_id=chat_id, role="user", content=user_message)
 
-    profile = get_student_profile(chat_id)
+    datetime_reply = get_direct_datetime_reply(user_message)
 
+    if datetime_reply is not None:
+        save_message(
+            chat_id=chat_id,
+            role="assistant",
+            content=datetime_reply,
+        )
+        await send_in_chunks(update.effective_message, datetime_reply)
+        return
+
+    profile = get_student_profile(chat_id)
     subjects = (
         list_subjects(profile["branch"], profile["semester"])
         if profile
         else []
     )
-    
-    # If an older or unusual profile branch does not match the catalog,
-    # still let Raven recognise explicitly requested subjects.
     if not subjects:
         subjects = list_all_subjects()
-    
     route = route_academic_message(user_message, subjects)
-    
-    # Complete a request such as:
-    # User: "Give me Unit 4 resources"
-    # Raven: "Which subject?"
-    # User: "COA"
+
     pending_request = context.user_data.get("pending_academic_request")
-    
     if pending_request and any(
         phrase in user_message.casefold()
         for phrase in ("never mind", "nevermind", "cancel")
     ):
         context.user_data.pop("pending_academic_request", None)
-    
         route = AcademicRoute(
             kind="direct",
             intent="cancel_pending",
             response="Okay—the pending academic request was cancelled.",
         )
-    
         pending_request = None
-    
+
     if pending_request and route.subject_code:
         units = " ".join(
-            f"Unit {unit}"
-            for unit in pending_request.get("unit_numbers", [])
+            f"Unit {unit}" for unit in pending_request.get("unit_numbers", [])
         )
-    
         route = route_academic_message(
-            (
-                f"{pending_request['intent']} "
-                f"{units} {route.subject_code}"
-            ),
+            f"{pending_request['intent']} {units} {route.subject_code}",
             subjects,
         )
-    
         context.user_data.pop("pending_academic_request", None)
         pending_request = None
-    
+
     if pending_request and route.kind == "none":
-        available = ", ".join(
-            subject["short_name"] for subject in subjects
-        )
-    
+        available = ", ".join(subject["short_name"] for subject in subjects)
         route = AcademicRoute(
             kind="direct",
             intent=pending_request["intent"],
-            unit_numbers=tuple(
-                pending_request.get("unit_numbers", [])
-            ),
+            unit_numbers=tuple(pending_request.get("unit_numbers", [])),
             response=(
-                "I still couldn't match that subject. "
-                f"Choose one of: {available}."
+                "I still couldn't match that subject. Choose one of: "
+                f"{available}."
             ),
         )
-    
-    previous_subject = context.user_data.get(
-        "last_academic_subject_code"
-    )
-    
-    if (
-        route.subject_code is None
-        and previous_subject
-        and looks_like_academic_followup(user_message)
-    ):
-        route = route_academic_message(
-            f"{user_message} {previous_subject}",
-            subjects,
-        )
-    
-    if route.subject_code:
-        context.user_data["last_academic_subject_code"] = (
-            route.subject_code
-        )
-    
-    elif (
-        route.kind == "direct"
-        and route.intent in {"resources", "syllabus"}
-    ):
-        context.user_data["pending_academic_request"] = {
-            "intent": route.intent,
-            "unit_numbers": list(route.unit_numbers),
-    }
+
+    previous_subject = context.user_data.get("last_academic_subject_code")
     if (
         route.subject_code is None
         and previous_subject
@@ -1032,6 +1062,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
     if route.subject_code:
         context.user_data["last_academic_subject_code"] = route.subject_code
+    elif route.kind == "direct" and route.intent in {"resources", "syllabus"}:
+        context.user_data["pending_academic_request"] = {
+            "intent": route.intent,
+            "unit_numbers": list(route.unit_numbers),
+        }
 
     if route.kind == "direct":
         reply = route.response or "I couldn't retrieve that academic information."
@@ -1071,7 +1106,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         chat_id=chat_id,
         limit=LONG_TERM_MEMORY_LIMIT,
     )
-    complete_system_prompt = SYSTEM_PROMPT + build_memory_context(long_term_memories)
+    complete_system_prompt = (
+    SYSTEM_PROMPT
+    + build_live_time_context()
+    + build_memory_context(long_term_memories)
+)
     if route.kind == "context":
         academic_context = build_academic_context(
             route,
@@ -1106,7 +1145,12 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def build_application() -> Application:
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = (
+        Application.builder()
+        .token(TELEGRAM_BOT_TOKEN)
+        .post_init(register_attendance_jobs)
+        .build()
+    )
 
     onboarding = ConversationHandler(
         entry_points=[
@@ -1171,10 +1215,12 @@ def build_application() -> Application:
 
     application.add_handler(onboarding)
     application.add_handler(exam_rescue)
+    application.add_handler(attendance_conversation_handler())
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("lastplan", last_plan_command))
     application.add_handler(CommandHandler("progress", progress_command))
+    application.add_handler(CommandHandler("bunk", bunk_command))
     application.add_handler(CommandHandler("remember", remember_command))
     application.add_handler(CommandHandler("memories", memories_command))
     application.add_handler(CommandHandler("forget", forget_command))
@@ -1184,6 +1230,18 @@ def build_application() -> Application:
         CallbackQueryHandler(
             academic_callback,
             pattern=r"^academic:(syllabus|resources):[A-Z0-9]+$",
+        )
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            attendance_action_callback,
+            pattern=r"^attendance:(dashboard|today|history|undo)$",
+        )
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            attendance_event_callback,
+            pattern=r"^att:(cycle|done|bunkpick|bunkout):",
         )
     )
     application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu:"))
@@ -1199,7 +1257,7 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 2.4 is online")
+    logger.info("Raven Sprint 2.5 Attendance Intelligence is online")
     logger.info("Ollama model: %s", OLLAMA_MODEL)
     logger.info("Database initialized")
     application.run_polling()

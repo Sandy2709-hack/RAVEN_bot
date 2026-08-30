@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "source": "JSS tentative class timetable, odd semester 2026-27",
+  "effective_from": "2026-08-17",
+  "timezone": "Asia/Kolkata",
+  "college_id": "jss",
+  "college_name": "JSS Academy of Technical Education, Noida",
+  "university": "AKTU",
+  "program": "B.Tech",
+  "branch": "CSE",
+  "branch_aliases": [
+    "CSE",
+    "CSE Core",
+    "Computer Science and Engineering",
+    "Computer Science"
+  ],
+  "semester": 3,
+  "periods": {
+    "1": {"start": "08:45", "end": "09:45"},
+    "2": {"start": "09:45", "end": "10:45"},
+    "3": {"start": "10:45", "end": "11:45"},
+    "4": {"start": "11:45", "end": "12:45"},
+    "5": {"start": "13:45", "end": "14:45"},
+    "6": {"start": "14:45", "end": "15:45"},
+    "7": {"start": "15:45", "end": "16:45"},
+    "8": {"start": "16:45", "end": "17:45"}
+  },
+  "subjects": {
+    "BOE309": {
+      "name": "Electronics Engineering",
+      "short_name": "EE",
+      "aliases": ["EE", "Electronics", "Electronics Engineering"],
+      "track_attendance": true
+    },
+    "BAS301": {
+      "name": "Technical Communication",
+      "short_name": "TC",
+      "aliases": ["TC", "Technical Communication"],
+      "track_attendance": true
+    },
+    "BCS301": {
+      "name": "Data Structures",
+      "short_name": "DS",
+      "aliases": ["DS", "Data Structure", "Data Structures"],
+      "track_attendance": true
+    },
+    "BCS302": {
+      "name": "Computer Organization and Architecture",
+      "short_name": "COA",
+      "aliases": ["COA", "Computer Organization", "Computer Organization and Architecture"],
+      "track_attendance": true
+    },
+    "BCS303": {
+      "name": "Discrete Structures and Theory of Logic",
+      "short_name": "DSTL",
+      "aliases": ["DSTL", "Discrete Structures", "Theory of Logic"],
+      "track_attendance": true
+    },
+    "BCC301": {
+      "name": "Cyber Security",
+      "short_name": "Cyber Security",
+      "aliases": ["CS", "Cyber Security", "Cybersecurity"],
+      "track_attendance": true
+    },
+    "BCS351": {
+      "name": "Data Structures Using C Lab",
+      "short_name": "DS Lab",
+      "aliases": ["DS Lab", "Data Structures Lab", "BCS351"],
+      "track_attendance": true
+    },
+    "BCS352": {
+      "name": "Computer Organization Lab",
+      "short_name": "CO Lab",
+      "aliases": ["CO Lab", "COA Lab", "Computer Organization Lab", "BCS352"],
+      "track_attendance": true
+    },
+    "BCS353": {
+      "name": "Web Designing Workshop",
+      "short_name": "WDW",
+      "aliases": ["WDW", "Web Designing Workshop", "Web Design Lab", "BCS353"],
+      "track_attendance": true
+    },
+    "MENTORING": {
+      "name": "Mentoring",
+      "short_name": "Mentoring",
+      "aliases": ["Mentoring"],
+      "track_attendance": false
+    }
+  },
+  "sections": {
+    "CSE1": {
+      "room": "AB-2/303",
+      "batch_groups": ["A1", "A2"],
+      "schedule": {
+        "monday": [
+          {"id": "c1-mo-1", "periods": [1], "subject_code": "BCS302"},
+          {"id": "c1-mo-2", "periods": [2], "subject_code": "BAS301"},
+          {"id": "c1-mo-3", "periods": [3], "subject_code": "BCS301"},
+          {"id": "c1-mo-4", "periods": [4], "subject_code": "BCC301"},
+          {"id": "c1-mo-56a2", "periods": [5, 6], "subject_code": "BCS352", "batch_group": "A2"},
+          {"id": "c1-mo-56a1", "periods": [5, 6], "subject_code": "BCS353", "batch_group": "A1"}
+        ],
+        "tuesday": [
+          {"id": "c1-tu-1", "periods": [1], "subject_code": "BCS303"},
+          {"id": "c1-tu-2", "periods": [2], "subject_code": "BCC301"},
+          {"id": "c1-tu-3", "periods": [3], "subject_code": "BAS301"},
+          {"id": "c1-tu-4", "periods": [4], "subject_code": "BOE309"},
+          {"id": "c1-tu-5", "periods": [5], "subject_code": "MENTORING"}
+        ],
+        "wednesday": [
+          {"id": "c1-we-1", "periods": [1], "subject_code": "BCS303"},
+          {"id": "c1-we-2", "periods": [2], "subject_code": "BCS302"},
+          {"id": "c1-we-3", "periods": [3], "subject_code": "BOE309"},
+          {"id": "c1-we-4", "periods": [4], "subject_code": "BCS301"}
+        ],
+        "thursday": [
+          {"id": "c1-th-12a1", "periods": [1, 2], "subject_code": "BCS351", "batch_group": "A1"},
+          {"id": "c1-th-3", "periods": [3], "subject_code": "BCS302"},
+          {"id": "c1-th-4", "periods": [4], "subject_code": "BAS301"},
+          {"id": "c1-th-5", "periods": [5], "subject_code": "BCS301"},
+          {"id": "c1-th-6", "periods": [6], "subject_code": "BOE309"},
+          {"id": "c1-th-78a2", "periods": [7, 8], "subject_code": "BCS353", "batch_group": "A2"}
+        ],
+        "friday": [
+          {"id": "c1-fr-1", "periods": [1], "subject_code": "BCS303"},
+          {"id": "c1-fr-2", "periods": [2], "subject_code": "BCS301"},
+          {"id": "c1-fr-34a1", "periods": [3, 4], "subject_code": "BCS352", "batch_group": "A1"},
+          {"id": "c1-fr-34a2", "periods": [3, 4], "subject_code": "BCS351", "batch_group": "A2"},
+          {"id": "c1-fr-5", "periods": [5], "subject_code": "BOE309"},
+          {"id": "c1-fr-6", "periods": [6], "subject_code": "BCS302"}
+        ],
+        "saturday": []
+      }
+    },
+    "CSE2": {
+      "room": "AB-2/304",
+      "batch_groups": ["B1", "B2"],
+      "schedule": {
+        "monday": [
+          {"id": "c2-mo-12b2", "periods": [1, 2], "subject_code": "BCS352", "batch_group": "B2"},
+          {"id": "c2-mo-12b1", "periods": [1, 2], "subject_code": "BCS351", "batch_group": "B1"},
+          {"id": "c2-mo-3", "periods": [3], "subject_code": "BOE309"},
+          {"id": "c2-mo-4", "periods": [4], "subject_code": "BCS302"}
+        ],
+        "tuesday": [
+          {"id": "c2-tu-1", "periods": [1], "subject_code": "BCC301"},
+          {"id": "c2-tu-2", "periods": [2], "subject_code": "BAS301"},
+          {"id": "c2-tu-3", "periods": [3], "subject_code": "BCS303"},
+          {"id": "c2-tu-4", "periods": [4], "subject_code": "BOE309"},
+          {"id": "c2-tu-5", "periods": [5], "subject_code": "BCS301"}
+        ],
+        "wednesday": [
+          {"id": "c2-we-1", "periods": [1], "subject_code": "BCS301"},
+          {"id": "c2-we-2", "periods": [2], "subject_code": "BCS303"},
+          {"id": "c2-we-3", "periods": [3], "subject_code": "BAS301"},
+          {"id": "c2-we-4", "periods": [4], "subject_code": "BCS302"}
+        ],
+        "thursday": [
+          {"id": "c2-th-1", "periods": [1], "subject_code": "MENTORING"},
+          {"id": "c2-th-2", "periods": [2], "subject_code": "BCS302"},
+          {"id": "c2-th-3", "periods": [3], "subject_code": "BCS301"},
+          {"id": "c2-th-4", "periods": [4], "subject_code": "BOE309"}
+        ],
+        "friday": [
+          {"id": "c2-fr-1", "periods": [1], "subject_code": "BCC301"},
+          {"id": "c2-fr-2", "periods": [2], "subject_code": "BOE309"},
+          {"id": "c2-fr-3", "periods": [3], "subject_code": "BCS303"},
+          {"id": "c2-fr-4", "periods": [4], "subject_code": "BCS302"},
+          {"id": "c2-fr-56b2", "periods": [5, 6], "subject_code": "BCS351", "batch_group": "B2"},
+          {"id": "c2-fr-56b1", "periods": [5, 6], "subject_code": "BCS353", "batch_group": "B1"}
+        ],
+        "saturday": [
+          {"id": "c2-sa-12b1", "periods": [1, 2], "subject_code": "BCS352", "batch_group": "B1"},
+          {"id": "c2-sa-12b2", "periods": [1, 2], "subject_code": "BCS353", "batch_group": "B2"},
+          {"id": "c2-sa-3", "periods": [3], "subject_code": "BCS301"},
+          {"id": "c2-sa-4", "periods": [4], "subject_code": "BAS301"}
+        ]
+      }
+    },
+    "CSE3": {
+      "room": "AB-2/305",
+      "batch_groups": ["C1", "C2"],
+      "schedule": {
+        "monday": [
+          {"id": "c3-mo-2", "periods": [2], "subject_code": "MENTORING"},
+          {"id": "c3-mo-3", "periods": [3], "subject_code": "BCS303"},
+          {"id": "c3-mo-4", "periods": [4], "subject_code": "BAS301"},
+          {"id": "c3-mo-5", "periods": [5], "subject_code": "BCS301"}
+        ],
+        "tuesday": [
+          {"id": "c3-tu-1", "periods": [1], "subject_code": "BCS301"},
+          {"id": "c3-tu-2", "periods": [2], "subject_code": "BOE309"},
+          {"id": "c3-tu-34c1", "periods": [3, 4], "subject_code": "BCS352", "batch_group": "C1"},
+          {"id": "c3-tu-34c2", "periods": [3, 4], "subject_code": "BCS351", "batch_group": "C2"},
+          {"id": "c3-tu-5", "periods": [5], "subject_code": "BCS302"}
+        ],
+        "wednesday": [
+          {"id": "c3-we-1", "periods": [1], "subject_code": "MENTORING"},
+          {"id": "c3-we-2", "periods": [2], "subject_code": "BCS303"},
+          {"id": "c3-we-3", "periods": [3], "subject_code": "BCS302"},
+          {"id": "c3-we-4", "periods": [4], "subject_code": "BAS301"}
+        ],
+        "thursday": [
+          {"id": "c3-th-1", "periods": [1], "subject_code": "BCC301"},
+          {"id": "c3-th-2", "periods": [2], "subject_code": "BCS302"},
+          {"id": "c3-th-34c2", "periods": [3, 4], "subject_code": "BCS352", "batch_group": "C2"},
+          {"id": "c3-th-34c1", "periods": [3, 4], "subject_code": "BCS353", "batch_group": "C1"},
+          {"id": "c3-th-5", "periods": [5], "subject_code": "BOE309"},
+          {"id": "c3-th-6", "periods": [6], "subject_code": "BCS301"}
+        ],
+        "friday": [
+          {"id": "c3-fr-2", "periods": [2], "subject_code": "BCS302"},
+          {"id": "c3-fr-3", "periods": [3], "subject_code": "BCS303"},
+          {"id": "c3-fr-4", "periods": [4], "subject_code": "BOE309"},
+          {"id": "c3-fr-5", "periods": [5], "subject_code": "BCS301"},
+          {"id": "c3-fr-6", "periods": [6], "subject_code": "BCC301"}
+        ],
+        "saturday": [
+          {"id": "c3-sa-1", "periods": [1], "subject_code": "BAS301"},
+          {"id": "c3-sa-2", "periods": [2], "subject_code": "BOE309"},
+          {"id": "c3-sa-34c2", "periods": [3, 4], "subject_code": "BCS353", "batch_group": "C2"},
+          {"id": "c3-sa-34c1", "periods": [3, 4], "subject_code": "BCS351", "batch_group": "C1"}
+        ]
+      }
+    }
+  }
+}

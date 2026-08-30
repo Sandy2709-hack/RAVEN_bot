@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ def get_connection() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.cursor()
 
         cursor.execute(
@@ -144,6 +145,85 @@ def init_db() -> None:
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS attendance_settings (
+                chat_id INTEGER PRIMARY KEY,
+                section TEXT NOT NULL,
+                batch_group TEXT NOT NULL,
+                target_percentage REAL NOT NULL DEFAULT 75
+                    CHECK (target_percentage >= 1 AND target_percentage < 100),
+                reminder_time TEXT NOT NULL DEFAULT '20:00',
+                semester_start TEXT NOT NULL,
+                semester_end TEXT,
+                cia_dates TEXT NOT NULL DEFAULT '[]',
+                setup_complete INTEGER NOT NULL DEFAULT 0
+                    CHECK (setup_complete IN (0, 1)),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS attendance_baselines (
+                chat_id INTEGER NOT NULL,
+                subject_code TEXT NOT NULL,
+                subject_name TEXT NOT NULL,
+                short_name TEXT NOT NULL,
+                attended INTEGER NOT NULL DEFAULT 0 CHECK (attended >= 0),
+                absent INTEGER NOT NULL DEFAULT 0 CHECK (absent >= 0),
+                estimated INTEGER NOT NULL DEFAULT 0
+                    CHECK (estimated IN (0, 1)),
+                active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+                display_order INTEGER NOT NULL DEFAULT 999,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (chat_id, subject_code),
+                FOREIGN KEY (chat_id)
+                    REFERENCES attendance_settings(chat_id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS attendance_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                subject_code TEXT NOT NULL,
+                class_date TEXT NOT NULL,
+                timetable_entry_id TEXT NOT NULL,
+                period_label TEXT NOT NULL,
+                class_count INTEGER NOT NULL DEFAULT 1 CHECK (class_count > 0),
+                status TEXT NOT NULL
+                    CHECK (
+                        status IN (
+                            'attended',
+                            'absent',
+                            'cancelled',
+                            'planned_bunk'
+                        )
+                    ),
+                reason TEXT,
+                source TEXT NOT NULL DEFAULT 'daily_checklist',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (chat_id, class_date, timetable_entry_id),
+                FOREIGN KEY (chat_id)
+                    REFERENCES attendance_settings(chat_id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_attendance_events_chat_date
+            ON attendance_events(chat_id, class_date, updated_at)
+            """
+        )
+
         connection.commit()
 
 
@@ -153,7 +233,7 @@ def save_message(chat_id: int, role: str, content: str) -> None:
     if role not in {"user", "assistant", "system"}:
         raise ValueError("role must be user, assistant, or system")
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         connection.execute(
             """
             INSERT INTO messages (chat_id, role, content)
@@ -167,7 +247,7 @@ def save_message(chat_id: int, role: str, content: str) -> None:
 def get_recent_messages(chat_id: int, limit: int = 20) -> list[dict[str, str]]:
     limit = max(1, min(100, int(limit)))
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         rows = connection.execute(
             """
             SELECT role, content
@@ -187,7 +267,7 @@ def get_recent_messages(chat_id: int, limit: int = 20) -> list[dict[str, str]]:
 
 
 def clear_chat_history(chat_id: int) -> int:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.execute(
             "DELETE FROM messages WHERE chat_id = ?",
             (chat_id,),
@@ -212,7 +292,7 @@ def save_memory(
     memory_key = memory_key.strip() if memory_key else None
     importance = max(1, min(10, int(importance)))
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.cursor()
 
         if memory_key:
@@ -276,7 +356,7 @@ def save_memory(
 def get_memories(chat_id: int, limit: int = 50) -> list[dict[str, Any]]:
     limit = max(1, min(200, int(limit)))
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         rows = connection.execute(
             """
             SELECT
@@ -310,7 +390,7 @@ def get_memories(chat_id: int, limit: int = 50) -> list[dict[str, Any]]:
 
 
 def delete_memory(chat_id: int, memory_id: int) -> bool:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.execute(
             "DELETE FROM memories WHERE id = ? AND chat_id = ?",
             (memory_id, chat_id),
@@ -320,7 +400,7 @@ def delete_memory(chat_id: int, memory_id: int) -> bool:
 
 
 def clear_memories(chat_id: int) -> int:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.execute(
             "DELETE FROM memories WHERE chat_id = ?",
             (chat_id,),
@@ -346,7 +426,7 @@ def save_student_profile(
     if semester not in range(1, 9):
         raise ValueError("Semester must be between 1 and 8")
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         connection.execute(
             """
             INSERT INTO student_profiles (
@@ -385,7 +465,7 @@ def save_student_profile(
 
 
 def get_student_profile(chat_id: int) -> dict[str, Any] | None:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         row = connection.execute(
             """
             SELECT
@@ -409,7 +489,7 @@ def get_student_profile(chat_id: int) -> dict[str, Any] | None:
 
 
 def delete_student_profile(chat_id: int) -> bool:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.execute(
             "DELETE FROM student_profiles WHERE chat_id = ?",
             (chat_id,),
@@ -434,7 +514,7 @@ def save_exam_rescue_plan(chat_id: int, plan: dict[str, Any]) -> int:
     plan_json = json.dumps(plan, ensure_ascii=False)
     completed_json = json.dumps(plan["completed_units"])
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         cursor = connection.execute(
             """
             INSERT INTO exam_rescue_plans (
@@ -467,7 +547,7 @@ def get_latest_exam_rescue_plan(
     chat_id: int,
     subject_code: str | None = None,
 ) -> dict[str, Any] | None:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         if subject_code:
             row = connection.execute(
                 """
@@ -562,7 +642,7 @@ def save_subject_progress(
         if score > score_max:
             raise ValueError("latest_score cannot exceed latest_score_max")
 
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         connection.execute(
             """
             INSERT INTO student_subject_progress (
@@ -602,7 +682,7 @@ def get_subject_progress(
     chat_id: int,
     subject_code: str,
 ) -> dict[str, Any] | None:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         row = connection.execute(
             """
             SELECT
@@ -634,7 +714,7 @@ def get_subject_progress(
 
 
 def get_all_subject_progress(chat_id: int) -> list[dict[str, Any]]:
-    with get_connection() as connection:
+    with closing(get_connection()) as connection:
         rows = connection.execute(
             """
             SELECT subject_code
@@ -650,3 +730,495 @@ def get_all_subject_progress(chat_id: int) -> list[dict[str, Any]]:
         for row in rows
         if (progress := get_subject_progress(chat_id, row["subject_code"])) is not None
     ]
+
+
+# =========================================================
+# ATTENDANCE SETTINGS AND BASELINES
+# =========================================================
+
+def save_attendance_settings(
+    *,
+    chat_id: int,
+    section: str,
+    batch_group: str,
+    semester_start: str,
+    semester_end: str | None = None,
+    cia_dates: list[str] | None = None,
+    target_percentage: float = 75.0,
+    reminder_time: str = "20:00",
+    setup_complete: bool = False,
+) -> dict[str, Any]:
+    section = section.strip().upper()
+    batch_group = batch_group.strip().upper()
+    target_percentage = float(target_percentage)
+    if not section or not batch_group:
+        raise ValueError("section and batch_group are required")
+    if not 1 <= target_percentage < 100:
+        raise ValueError("target_percentage must be between 1 and 99.99")
+
+    try:
+        hour_text, minute_text = reminder_time.split(":", maxsplit=1)
+        hour, minute = int(hour_text), int(minute_text)
+    except (ValueError, AttributeError):
+        raise ValueError("reminder_time must use HH:MM") from None
+    if hour not in range(24) or minute not in range(60):
+        raise ValueError("reminder_time must be a valid 24-hour time")
+
+    with closing(get_connection()) as connection:
+        connection.execute(
+            """
+            INSERT INTO attendance_settings (
+                chat_id,
+                section,
+                batch_group,
+                target_percentage,
+                reminder_time,
+                semester_start,
+                semester_end,
+                cia_dates,
+                setup_complete
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                section = excluded.section,
+                batch_group = excluded.batch_group,
+                target_percentage = excluded.target_percentage,
+                reminder_time = excluded.reminder_time,
+                semester_start = excluded.semester_start,
+                semester_end = excluded.semester_end,
+                cia_dates = excluded.cia_dates,
+                setup_complete = excluded.setup_complete,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                chat_id,
+                section,
+                batch_group,
+                target_percentage,
+                reminder_time,
+                semester_start,
+                semester_end,
+                json.dumps(sorted(set(cia_dates or []))),
+                int(setup_complete),
+            ),
+        )
+        connection.commit()
+
+    settings = get_attendance_settings(chat_id)
+    if settings is None:
+        raise RuntimeError("Attendance settings were not saved")
+    return settings
+
+
+def get_attendance_settings(chat_id: int) -> dict[str, Any] | None:
+    with closing(get_connection()) as connection:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM attendance_settings
+            WHERE chat_id = ?
+            """,
+            (chat_id,),
+        ).fetchone()
+
+    if not row:
+        return None
+    result = dict(row)
+    try:
+        result["cia_dates"] = json.loads(result["cia_dates"])
+    except (TypeError, json.JSONDecodeError):
+        result["cia_dates"] = []
+    result["setup_complete"] = bool(result["setup_complete"])
+    return result
+
+
+def get_all_attendance_settings(*, complete_only: bool = True) -> list[dict[str, Any]]:
+    query = "SELECT chat_id FROM attendance_settings"
+    if complete_only:
+        query += " WHERE setup_complete = 1"
+    query += " ORDER BY chat_id"
+
+    with closing(get_connection()) as connection:
+        rows = connection.execute(query).fetchall()
+    return [
+        settings
+        for row in rows
+        if (settings := get_attendance_settings(row["chat_id"])) is not None
+    ]
+
+
+def deactivate_attendance_baselines(chat_id: int) -> None:
+    with closing(get_connection()) as connection:
+        connection.execute(
+            """
+            UPDATE attendance_baselines
+            SET active = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE chat_id = ?
+            """,
+            (chat_id,),
+        )
+        connection.commit()
+
+
+def save_attendance_baseline(
+    *,
+    chat_id: int,
+    subject_code: str,
+    subject_name: str,
+    short_name: str,
+    attended: int,
+    conducted: int,
+    estimated: bool = False,
+    active: bool = True,
+    display_order: int = 999,
+) -> dict[str, Any]:
+    subject_code = subject_code.strip().upper()
+    attended = int(attended)
+    conducted = int(conducted)
+    if not subject_code:
+        raise ValueError("subject_code is required")
+    if attended < 0 or conducted < 0 or attended > conducted:
+        raise ValueError("attended must be between 0 and conducted")
+    absent = conducted - attended
+
+    with closing(get_connection()) as connection:
+        connection.execute(
+            """
+            INSERT INTO attendance_baselines (
+                chat_id,
+                subject_code,
+                subject_name,
+                short_name,
+                attended,
+                absent,
+                estimated,
+                active,
+                display_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(chat_id, subject_code) DO UPDATE SET
+                subject_name = excluded.subject_name,
+                short_name = excluded.short_name,
+                attended = excluded.attended,
+                absent = excluded.absent,
+                estimated = excluded.estimated,
+                active = excluded.active,
+                display_order = excluded.display_order,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                chat_id,
+                subject_code,
+                subject_name.strip(),
+                short_name.strip(),
+                attended,
+                absent,
+                int(estimated),
+                int(active),
+                int(display_order),
+            ),
+        )
+        connection.commit()
+
+    baseline = get_attendance_baseline(chat_id, subject_code)
+    if baseline is None:
+        raise RuntimeError("Attendance baseline was not saved")
+    return baseline
+
+
+def get_attendance_baseline(
+    chat_id: int,
+    subject_code: str,
+) -> dict[str, Any] | None:
+    with closing(get_connection()) as connection:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM attendance_baselines
+            WHERE chat_id = ? AND subject_code = ?
+            """,
+            (chat_id, subject_code.strip().upper()),
+        ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    result["estimated"] = bool(result["estimated"])
+    result["active"] = bool(result["active"])
+    return result
+
+
+def get_attendance_baselines(
+    chat_id: int,
+    *,
+    active_only: bool = True,
+) -> list[dict[str, Any]]:
+    query = "SELECT subject_code FROM attendance_baselines WHERE chat_id = ?"
+    if active_only:
+        query += " AND active = 1"
+    query += " ORDER BY display_order, subject_code"
+
+    with closing(get_connection()) as connection:
+        rows = connection.execute(query, (chat_id,)).fetchall()
+    return [
+        baseline
+        for row in rows
+        if (
+            baseline := get_attendance_baseline(chat_id, row["subject_code"])
+        ) is not None
+    ]
+
+
+# =========================================================
+# ATTENDANCE EVENTS
+# =========================================================
+
+ATTENDANCE_EVENT_STATUSES = {
+    "attended",
+    "absent",
+    "cancelled",
+    "planned_bunk",
+}
+
+
+def save_attendance_event(
+    *,
+    chat_id: int,
+    subject_code: str,
+    class_date: str,
+    timetable_entry_id: str,
+    period_label: str,
+    class_count: int,
+    status: str,
+    reason: str | None = None,
+    source: str = "daily_checklist",
+) -> dict[str, Any]:
+    subject_code = subject_code.strip().upper()
+    status = status.strip().lower()
+    class_count = int(class_count)
+    if status not in ATTENDANCE_EVENT_STATUSES:
+        raise ValueError("Invalid attendance event status")
+    if class_count <= 0:
+        raise ValueError("class_count must be positive")
+
+    with closing(get_connection()) as connection:
+        connection.execute(
+            """
+            INSERT INTO attendance_events (
+                chat_id,
+                subject_code,
+                class_date,
+                timetable_entry_id,
+                period_label,
+                class_count,
+                status,
+                reason,
+                source
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(chat_id, class_date, timetable_entry_id) DO UPDATE SET
+                subject_code = excluded.subject_code,
+                period_label = excluded.period_label,
+                class_count = excluded.class_count,
+                status = excluded.status,
+                reason = excluded.reason,
+                source = excluded.source,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                chat_id,
+                subject_code,
+                class_date,
+                timetable_entry_id,
+                period_label,
+                class_count,
+                status,
+                reason.strip() if reason else None,
+                source.strip() or "daily_checklist",
+            ),
+        )
+        connection.commit()
+
+    event = get_attendance_event_for_entry(chat_id, class_date, timetable_entry_id)
+    if event is None:
+        raise RuntimeError("Attendance event was not saved")
+    return event
+
+
+def get_attendance_event(event_id: int, chat_id: int) -> dict[str, Any] | None:
+    with closing(get_connection()) as connection:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM attendance_events
+            WHERE id = ? AND chat_id = ?
+            """,
+            (int(event_id), chat_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_attendance_event_for_entry(
+    chat_id: int,
+    class_date: str,
+    timetable_entry_id: str,
+) -> dict[str, Any] | None:
+    with closing(get_connection()) as connection:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM attendance_events
+            WHERE chat_id = ?
+              AND class_date = ?
+              AND timetable_entry_id = ?
+            """,
+            (chat_id, class_date, timetable_entry_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_attendance_events_for_date(
+    chat_id: int,
+    class_date: str,
+) -> list[dict[str, Any]]:
+    with closing(get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM attendance_events
+            WHERE chat_id = ? AND class_date = ?
+            ORDER BY id
+            """,
+            (chat_id, class_date),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_attendance_event_status(
+    *,
+    chat_id: int,
+    event_id: int,
+    status: str,
+    reason: str | None = None,
+) -> dict[str, Any] | None:
+    status = status.strip().lower()
+    if status not in ATTENDANCE_EVENT_STATUSES:
+        raise ValueError("Invalid attendance event status")
+
+    with closing(get_connection()) as connection:
+        cursor = connection.execute(
+            """
+            UPDATE attendance_events
+            SET status = ?,
+                reason = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND chat_id = ?
+            """,
+            (status, reason.strip() if reason else None, int(event_id), chat_id),
+        )
+        connection.commit()
+    return get_attendance_event(event_id, chat_id) if cursor.rowcount else None
+
+
+def delete_attendance_event_for_entry(
+    chat_id: int,
+    class_date: str,
+    timetable_entry_id: str,
+) -> bool:
+    with closing(get_connection()) as connection:
+        cursor = connection.execute(
+            """
+            DELETE FROM attendance_events
+            WHERE chat_id = ?
+              AND class_date = ?
+              AND timetable_entry_id = ?
+            """,
+            (chat_id, class_date, timetable_entry_id),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def clear_attendance_events(chat_id: int) -> int:
+    with closing(get_connection()) as connection:
+        cursor = connection.execute(
+            "DELETE FROM attendance_events WHERE chat_id = ?",
+            (chat_id,),
+        )
+        connection.commit()
+        return cursor.rowcount
+
+
+def undo_last_attendance_event(chat_id: int) -> dict[str, Any] | None:
+    with closing(get_connection()) as connection:
+        row = connection.execute(
+            """
+            SELECT *
+            FROM attendance_events
+            WHERE chat_id = ?
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (chat_id,),
+        ).fetchone()
+        if not row:
+            return None
+        connection.execute(
+            "DELETE FROM attendance_events WHERE id = ? AND chat_id = ?",
+            (row["id"], chat_id),
+        )
+        connection.commit()
+    return dict(row)
+
+
+def get_recent_attendance_events(
+    chat_id: int,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    limit = max(1, min(100, int(limit)))
+    with closing(get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM attendance_events
+            WHERE chat_id = ?
+            ORDER BY class_date DESC, updated_at DESC, id DESC
+            LIMIT ?
+            """,
+            (chat_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_attendance_totals(chat_id: int) -> list[dict[str, Any]]:
+    baselines = get_attendance_baselines(chat_id, active_only=True)
+    with closing(get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                subject_code,
+                SUM(CASE WHEN status = 'attended' THEN class_count ELSE 0 END)
+                    AS attended_delta,
+                SUM(CASE WHEN status = 'absent' THEN class_count ELSE 0 END)
+                    AS absent_delta
+            FROM attendance_events
+            WHERE chat_id = ?
+            GROUP BY subject_code
+            """,
+            (chat_id,),
+        ).fetchall()
+    deltas = {row["subject_code"]: dict(row) for row in rows}
+
+    totals = []
+    for baseline in baselines:
+        delta = deltas.get(baseline["subject_code"], {})
+        totals.append(
+            {
+                **baseline,
+                "attended": baseline["attended"]
+                + int(delta.get("attended_delta") or 0),
+                "absent": baseline["absent"]
+                + int(delta.get("absent_delta") or 0),
+            }
+        )
+    return totals

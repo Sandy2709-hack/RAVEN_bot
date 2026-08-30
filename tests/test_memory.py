@@ -1,6 +1,8 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import memory
 
@@ -13,6 +15,30 @@ class MemoryDatabaseTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+
+    def test_database_path_supports_railway_volume_and_explicit_override(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"RAILWAY_VOLUME_MOUNT_PATH": "/data"},
+            clear=True,
+        ):
+            self.assertEqual(
+                memory.resolve_database_path(),
+                Path("/data/raven_memory.db"),
+            )
+
+        with patch.dict(
+            os.environ,
+            {
+                "RAILWAY_VOLUME_MOUNT_PATH": "/data",
+                "RAVEN_DATABASE_PATH": "/custom/raven.db",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                memory.resolve_database_path(),
+                Path("/custom/raven.db"),
+            )
 
     def test_recent_messages_are_returned_in_conversation_order(self) -> None:
         memory.save_message(27, "user", "Hello")

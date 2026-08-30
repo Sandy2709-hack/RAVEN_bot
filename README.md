@@ -1,8 +1,10 @@
-# Raven Sprint 2.5 — Attendance Intelligence
+# Raven Sprint 2.6 — Railway Cloud Deployment
 
-Sprint 2.5 keeps the verified Academic Context Bridge from Sprint 2.4.1 and adds
-deterministic attendance tracking, a verified JSS Semester 3 timetable, daily
-checklists, safe-bunk calculations and the `/bunk` workflow.
+Sprint 2.6 keeps Attendance Intelligence and the verified Academic Context
+Bridge, then makes Raven deployable as an always-running Railway service. Groq
+provides cloud AI responses while Ollama remains an optional local fallback.
+
+See `RAILWAY_DEPLOYMENT.md` for the complete deployment walkthrough.
 
 This sprint does not add Semester Strategy navigation or PYQ rankings.
 
@@ -124,24 +126,27 @@ closed for Windows compatibility.
 
 ## Project files
 
-- `bot.py` — Telegram commands, conversations, routing integration and Ollama.
+- `bot.py` — Telegram commands, conversations and routing integration.
+- `ai_provider.py` — configurable Groq cloud and Ollama local AI providers.
 - `academic_router.py` — deterministic academic intent and subject detection.
 - `academics.py` — validated catalog, formatters and Exam Rescue algorithm.
 - `memory.py` — SQLite memory, profiles, plans and preparation progress.
 - `keyboards.py` — Telegram inline keyboards with subject credits.
 - `attendance.py` — timetable lookup, date handling and attendance mathematics.
 - `attendance_handlers.py` — setup, checklist, reminders and `/bunk` handlers.
+- `railway.json` — Railway start command and automatic restart policy.
+- `.python-version` — Railway's maintained Python 3.13 runtime selection.
+- `RAILWAY_DEPLOYMENT.md` — cloud variables, volume and verification guide.
 - `data/subjects.json` — semester catalog and numeric credit values.
 - `data/subjects/semester_3/` — official syllabus and starter resources.
 - `data/timetables/jss/cse_semester_3.json` — directly accessible JSS timetable.
 - `tests/` — routing, academics, keyboard and database tests.
 
-## Safe upgrade from Sprint 2.4.1
+## Safe upgrade from Sprint 2.5
 
 1. Stop Raven with `CTRL+C`.
 2. Commit or copy the existing project as a backup.
-3. Replace the Sprint 2.4.1 Python files, tests, README, requirements and `data`
-   folder with the Sprint 2.5 versions.
+3. Replace the Sprint 2.5 project files with the Sprint 2.6 versions.
 4. Keep the existing `.env` and `raven_memory.db`.
 5. In the active virtual environment, run:
 
@@ -151,8 +156,28 @@ py -m unittest discover -s tests -v
 py bot.py
 ```
 
-The first start safely creates the new attendance tables. The JobQueue extra in
-`requirements.txt` is required for the 20:00 IST reminder.
+The first start preserves existing tables. The JobQueue extra is required for
+the 20:00 IST reminder, and `tzdata` keeps Asia/Kolkata available across local
+Windows and Railway Linux environments.
+
+## AI provider modes
+
+Raven chooses its AI provider from `AI_PROVIDER`:
+
+- `groq` — intended for Railway; requires `GROQ_API_KEY` and uses
+  `GROQ_MODEL`.
+- `ollama` — intended for local development; requires `OLLAMA_MODEL` and a
+  running Ollama server.
+
+Academic resources, syllabus, credits, preparation tracking, attendance and
+`/bunk` remain deterministic Python features. They do not depend on Groq or
+Ollama inventing data.
+
+## Persistent Railway data
+
+Attach one Railway volume at `/data`. Raven automatically reads
+`RAILWAY_VOLUME_MOUNT_PATH` and stores SQLite at `/data/raven_memory.db`.
+`RAVEN_DATABASE_PATH` may override the full file path when needed.
 
 ## Commands
 
@@ -179,9 +204,13 @@ The first start safely creates the new attendance tables. The JobQueue extra in
 - The Academic catalog currently covers CSE and allied branches, Semester 3.
 - Attendance timetable data currently covers JSS CSE1, CSE2 and CSE3 only.
 - CIA and semester-end dates are user supplied until a verified calendar exists.
-- Scheduled reminders run only while the bot process is online. Pending data is
-  retained when the PC is off.
+- Railway reminders run while the deployed service is online. The developer PC
+  and local Ollama may be switched off when `AI_PROVIDER=groq`.
+- The initial deployment still uses one SQLite database and must run exactly
+  one Railway replica.
+- Groq free/developer limits may temporarily reject chat requests; Raven's
+  deterministic academic and attendance handlers remain available.
 
-The planned next data sprint is PYQ Intelligence: collect public question
-papers, extract questions, map them to official topics and calculate transparent
-importance and confidence scores.
+The planned next sprint is verified AKTU News and Notices: collect official
+updates, deduplicate them, preserve their source links and notify subscribed
+students without allowing the AI provider to invent notices.

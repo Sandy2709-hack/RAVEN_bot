@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -6,10 +7,25 @@ from typing import Any
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = BASE_DIR / "raven_memory.db"
+
+
+def resolve_database_path() -> Path:
+    configured_path = os.getenv("RAVEN_DATABASE_PATH", "").strip()
+    if configured_path:
+        return Path(configured_path).expanduser()
+
+    railway_volume = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    if railway_volume:
+        return Path(railway_volume) / "raven_memory.db"
+
+    return BASE_DIR / "raven_memory.db"
+
+
+DATABASE_PATH = resolve_database_path()
 
 
 def get_connection() -> sqlite3.Connection:
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DATABASE_PATH, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")

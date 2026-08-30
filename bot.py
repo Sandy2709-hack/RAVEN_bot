@@ -13,13 +13,11 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from attendance import india_now
 
+from ai_provider import ask_ai, provider_description
 from config import (
+    AI_PROVIDER,
     LONG_TERM_MEMORY_LIMIT,
-    OLLAMA_MODEL,
-    OLLAMA_TIMEOUT_SECONDS,
-    OLLAMA_URL,
     RECENT_MESSAGE_LIMIT,
     TELEGRAM_BOT_TOKEN,
     validate_settings,
@@ -116,112 +114,6 @@ Raven's local catalog. Use its exact syllabus, credits, progress and resource
 links. Never claim you cannot access information explicitly present there.
 Never invent missing academic data or PYQ importance.
 """.strip()
-
-def build_live_time_context() -> str:
-    now = india_now()
-
-    return (
-        "\n\nTRUSTED LIVE DATE AND TIME:\n"
-        f"- Date: {now.strftime('%A, %d %B %Y')}\n"
-        f"- Time: {now.strftime('%I:%M %p')}\n"
-        "- Timezone: Asia/Kolkata (IST)\n"
-        "Use this information whenever the user asks about dates, "
-        "days, time, today, tomorrow or scheduling. Never guess them."
-    )
-
-
-def get_direct_datetime_reply(message: str) -> str | None:
-    text = " ".join(
-        message.casefold()
-        .replace("’", "'")
-        .replace("?", "")
-        .split()
-    )
-
-    asks_date = any(
-        phrase in text
-        for phrase in (
-            "what is today's date",
-            "what is todays date",
-            "today's date",
-            "todays date",
-            "what date is it",
-            "what date is today",
-            "what day is it",
-            "what day is today",
-            "what day and date",
-            "which day is today",
-            "current date",
-        )
-    )
-
-    asks_time = any(
-        phrase in text
-        for phrase in (
-            "what time is it",
-            "current time",
-            "time right now",
-            "what is the time",
-        )
-    )
-
-    if not asks_date and not asks_time:
-        return None
-
-    now = india_now()
-
-    if asks_date and asks_time:
-        return (
-            f"It is {now.strftime('%A, %d %B %Y')}, "
-            f"and the current time is {now.strftime('%I:%M %p')} IST."
-        )
-
-    if asks_date:
-        return f"Today is {now.strftime('%A, %d %B %Y')}."
-
-    return f"The current time is {now.strftime('%I:%M %p')} IST."
-
-
-def ask_ollama(messages: list[dict[str, str]]) -> str:
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": False,
-        "think": False,
-        "keep_alive": "30m",
-        "options": {
-            "num_ctx": 4096,
-            "num_predict": 200,
-        },
-    }
-
-    response = requests.post(
-        OLLAMA_URL,
-        json=payload,
-        timeout=OLLAMA_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    data = response.json()
-
-    total_seconds = data.get("total_duration", 0) / 1_000_000_000
-    load_seconds = data.get("load_duration", 0) / 1_000_000_000
-    prompt_seconds = data.get("prompt_eval_duration", 0) / 1_000_000_000
-    generation_seconds = data.get("eval_duration", 0) / 1_000_000_000
-    eval_count = data.get("eval_count", 0)
-    tokens_per_second = (
-        eval_count / generation_seconds if generation_seconds > 0 else 0
-    )
-
-    logger.info(
-        "Ollama total=%.2fs load=%.2fs prompt=%.2fs generation=%.2fs speed=%.2f tok/s",
-        total_seconds,
-        load_seconds,
-        prompt_seconds,
-        generation_seconds,
-        tokens_per_second,
-    )
-
-    return data["message"]["content"].strip()
 
 
 def build_memory_context(memories: list[dict]) -> str:
@@ -744,7 +636,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if action == "chat":
         text = (
             "💬 CHAT\n\nAsk Raven normally. Academic syllabus, resources, credits "
-            "and preparation data are retrieved before Ollama answers."
+            "and preparation data are retrieved before the AI answers."
         )
     elif action == "attendance":
         text = "📊 Send /attendance to open Attendance Intelligence."
@@ -993,17 +885,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("User chat_id=%s sent a message", chat_id)
     save_message(chat_id=chat_id, role="user", content=user_message)
 
-    datetime_reply = get_direct_datetime_reply(user_message)
-
-    if datetime_reply is not None:
-        save_message(
-            chat_id=chat_id,
-            role="assistant",
-            content=datetime_reply,
-        )
-        await send_in_chunks(update.effective_message, datetime_reply)
-        return
-
     profile = get_student_profile(chat_id)
     subjects = (
         list_subjects(profile["branch"], profile["semester"])
@@ -1106,11 +987,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         chat_id=chat_id,
         limit=LONG_TERM_MEMORY_LIMIT,
     )
-    complete_system_prompt = (
-    SYSTEM_PROMPT
-    + build_live_time_context()
-    + build_memory_context(long_term_memories)
-)
+    complete_system_prompt = SYSTEM_PROMPT + build_memory_context(long_term_memories)
     if route.kind == "context":
         academic_context = build_academic_context(
             route,
@@ -1122,17 +999,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-        ai_reply = await asyncio.to_thread(ask_ollama, messages)
+        ai_reply = await asyncio.to_thread(ask_ai, messages)
         save_message(chat_id=chat_id, role="assistant", content=ai_reply)
         await send_in_chunks(update.effective_message, ai_reply)
     except requests.exceptions.ConnectionError:
         await update.effective_message.reply_text(
-            "⚠️ I can't connect to Ollama. Make sure Ollama is running."
+            "⚠️ I can't connect to the configured AI service right now."
         )
     except requests.exceptions.Timeout:
         await update.effective_message.reply_text(
-            "⏳ The local AI took too long to respond."
+            "⏳ The AI service took too long to respond."
         )
+    except requests.exceptions.HTTPError as error:
+        status_code = (
+            error.response.status_code if error.response is not None else None
+        )
+        logger.exception("AI provider returned HTTP %s", status_code)
+        if status_code in {401, 403}:
+            reply = "⚠️ Raven's AI key is invalid or missing."
+        elif status_code == 429:
+            reply = "⏳ Raven's AI limit is temporarily exhausted. Try again shortly."
+        else:
+            reply = "⚠️ Raven's AI service rejected the request."
+        await update.effective_message.reply_text(reply)
     except Exception:
         logger.exception("Message handling failed for chat_id=%s", chat_id)
         await update.effective_message.reply_text(
@@ -1257,8 +1146,9 @@ def main() -> None:
     init_db()
     application = build_application()
 
-    logger.info("Raven Sprint 2.5 Attendance Intelligence is online")
-    logger.info("Ollama model: %s", OLLAMA_MODEL)
+    logger.info("Raven Sprint 2.6 Cloud Deployment is online")
+    logger.info("AI provider: %s", provider_description())
+    logger.info("Runtime mode: %s", "Railway" if AI_PROVIDER == "groq" else "local")
     logger.info("Database initialized")
     application.run_polling()
 
